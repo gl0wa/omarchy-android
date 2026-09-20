@@ -1,6 +1,28 @@
 # Status — project memory (update on every meaningful experiment)
 
-## Current milestone
+## Milestone 2 — active (2026-09-20)
+Explicit user authorization now includes Omarchy; older M1 scope exclusions below
+are historical. Pixel remains untouched and its host GPU blocker remains deferred.
+
+Baseline revalidated: ArchARM 7.2.6, systemd running, native Wayland Foot clients,
+1280x800 Virtual-1, USB pointer/keyboard, and GLX `Accelerated: yes` with
+`virgl (ANGLE (Apple, Apple M4 Pro, OpenGL 4.1 Metal - 90.5))`.
+Evidence: `artifacts/diagnostics/2026-09-20-m2-baseline/` (GPU, GLX, clients,
+input inventory, packages, system). UTM UI input reached Foot.
+
+Rollback: clean guest shutdown, verified disk closed, APFS CoW copy of the entire
+UTM bundle to `artifacts/checkpoints/m1-2026-09-20/omarchy-m1.utm`;
+`qemu-img check` passed. Reference repository commit
+`04caf82f243a7c7e3fc545fa6eddd96dcfed1c32`; boot checksums saved beside bundle.
+Reproduce future checkpoints with `./dev/checkpoint-utm NAME` while stopped.
+The working disk was expanded offline from 6 to 24 GiB and ext4 grown online;
+checkpoint remains at 6 GiB. No kernel or GPU changes at this stage.
+
+Research: current upstream has Quickshell + Foot and Lua Hyprland configuration;
+released v4.0.4 and official ARM-aware package recipes are under inspection.
+Installation has not yet begun.
+
+## Historical Milestone 1 record
 Milestone 1: aarch64 Arch + systemd + net + persistent storage + accelerated
 vGPU (non-llvmpipe) + Hyprland + Foot + keyboard/pointer, emulator-first.
 **MAC SIDE COMPLETE 2026-09-20** (all criteria met under QEMU/UTM on the

@@ -1,0 +1,20 @@
+#!/bin/sh
+# APFS CoW checkpoint of a STOPPED UTM VM, including direct-boot kernel.
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+BUNDLE="${M2_UTM_BUNDLE:-$HOME/Library/Containers/com.utmapp.UTM/Data/Documents/omarchy-m1.utm}"
+NAME="${1:?usage: dev/checkpoint-utm NAME (VM must be powered off)}"
+case "$NAME" in *[!A-Za-z0-9._-]*|'') echo 'Invalid checkpoint name' >&2; exit 1;; esac
+OUT="$ROOT/artifacts/checkpoints/$NAME"
+[ ! -e "$OUT" ] || { echo "Already exists: $OUT" >&2; exit 1; }
+[ -f "$BUNDLE/Data/archroot.qcow2" ] || exit 1
+if lsof "$BUNDLE/Data/archroot.qcow2" >/dev/null 2>&1; then
+  echo 'VM disk is open: shut down the guest before checkpointing.' >&2; exit 1
+fi
+qemu-img check "$BUNDLE/Data/archroot.qcow2"
+mkdir -p "$OUT"
+cp -cR "$BUNDLE" "$OUT/"
+git -C "$ROOT" rev-parse HEAD > "$OUT/repo-commit"
+shasum -a 256 "$OUT/$(basename "$BUNDLE")/Data/Image" "$OUT/$(basename "$BUNDLE")/Data/initramfs-linux.img" > "$OUT/boot.sha256"
+echo "Checkpoint: $OUT"
+echo 'Restore only with guest stopped and UTM fully quit; preserve the current bundle first.'
