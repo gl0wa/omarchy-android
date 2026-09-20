@@ -23,7 +23,15 @@ for f in "$QCOW2" "$KERNEL" "$INITRD"; do
 done
 command -v python3 >/dev/null 2>&1 || { echo "missing host dep: python3" >&2; exit 1; }
 
-VM_UUID="$(uuidgen)"
+# Stable VM UUID across rebuilds (UTM registers by UUID; a fresh uuidgen
+# each time orphans the registration). Seed: first-ever generated UUID.
+FIRST_UUID="D7AC58FB-112E-42F4-98E1-1BCFB29F38E3"
+if [ -f "$BUNDLE/config.plist" ]; then
+  VM_UUID="$(python3 -c "import plistlib; print(plistlib.load(open('$BUNDLE/config.plist','rb'))['Information']['UUID'])")"
+else
+  VM_UUID="$FIRST_UUID"
+fi
+echo "host/utm/make-bundle: using VM UUID $VM_UUID (stable across rebuilds)"
 DISK_ID="$(uuidgen)"
 KERN_ID="$(uuidgen)"
 INITRD_ID="$(uuidgen)"
@@ -69,9 +77,13 @@ cfg = {
         'TSO': False,
         'RTCLocalTime': False,
         'PS2Controller': False,
-        # QEMUArgument encodes as plain strings (utmapp/UTM QEMUArgument.swift).
+        # QEMUArgument encodes as plain strings, then UTM SPLITS each entry
+        # on whitespace (double-quoted spans stay together) — see
+        # parsedUserArguments in UTMQemuConfiguration+Arguments.swift.
+        # So the multi-word -append value must be ONE entry wrapped in
+        # literal double quotes, or QEMU sees `rw` as an image filename.
         'AdditionalArguments': [
-            '-append', 'root=/dev/vda rw rootwait console=ttyAMA0,115200',
+            '-append', '"root=/dev/vda rw rootwait console=ttyAMA0,115200"',
             '-serial', 'null',
         ],
     },
