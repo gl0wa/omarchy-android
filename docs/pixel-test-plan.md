@@ -133,8 +133,43 @@ adb shell -t /apex/com.android.virt/bin/vm console  # interactive serial console
   protected-VM hardening, explicitly out of scope).
 - Any pass: capture console logs to `artifacts/diagnostics/<date>-pixel/`.
 
-## Test session checklist (day of)
-- [ ] Phone charged 50%+, USB-C data cable, `adb devices` authorized
-- [ ] Mac has current `guest/kernel/boot/*` + `guest/image/archroot.qcow2`
-- [ ] Run D-0 → paste results here before pushing anything
-- [ ] One hypothesis at a time; logs after every step; update `docs/status.md`
+## Session 1 results (2026-09-20, Pixel 8 Pro husky, build CP41.260828.004.A8, unrooted)
+All D-0→D-2 run with ZERO privileged operations (`vm run` works as shell).
+Logs: `artifacts/diagnostics/2026-09-20-pixel/`.
+
+- D-0 ✓: `vm.supported=1`, `protected_vm.supported=1`, `kvm.arm-protected`,
+  `/dev/kvm` exists, `vm` tool has run/list/console/info. Contrary to the
+  android-15 doc, NO `adb root` needed for any of this.
+- D-1 ✓ (after 1 fix): H1 (`console=ttyAMA0`) silent → H2 (`console=ttyS0`)
+  boots 7.2.6 to initramfs (`Machine model: linux,dummy-virt`, 1 vCPU).
+  Lesson: AVF/crosvm serial is 8250 `ttyS0`, not pl011 `ttyAMA0`. No MPAM
+  panic, no `arm64.nompam` needed.
+- D-2 ✓ (after 1 fix): qcow2 pushed as-is is opened RAW by `vm run`
+  (3.95 GB vda, no superblock → emergency shell). Fix: raw + resize2fs -M
+  (4.3 GB) → full Arch boot to multi-user, sshd up, gettys on ttyS0+hvc0.
+  Evidence: `h4-console.log` (165 OKs, Graphical Interface reached).
+- D-3 ✗ (architectural, not a bug): `gpu:{virglrenderer/virgl2}` (+display)
+  SILENTLY IGNORED — arch-h5 crosvm cmdline has no `--gpu`, no `/dev/dri`,
+  eglinfo llvmpipe. Same for `network:true` AND `-n` flag (no NIC, only lo)
+  and vsock (no device). I.e. unrooted `vm run` serves kernel/initrd/disk/
+  serial/balloon only. Console in/out works via `--console/--console-in`
+  files; interactive `vm console` needs a TTY (blocked over plain adb).
+- In-guest probe that made this possible: `guest/overlays/avf-probe/`
+  (`m1-avf-probe.sh` + one-shot service dumping systemd/net/DRM/Mesa to
+  both serial consoles → lands in the `--console` log, no shell needed).
+
+## Next: D-3b Terminal-app GPU probe (needs: Developer option "Linux
+terminal" + first-run Debian provisioning, all user-revertible app data)
+Rationale (layer attribution): current Android documents GPU ONLY via the
+Terminal app (`/sdcard/linux/virglrenderer` file + ANGLE for Terminal).
+Proving virgl under stock Debian isolates "AVF GPU works on this device"
+from "custom Arch guest + GPU" (needs app-API `VirtualMachineManager`
+path — PocketVM-style APK, permissions grantable unrooted, SELinux
+surface rules TBD). Do NOT push further custom-guest GPU JSONs via
+`vm run` — evidence says the tool drops those fields.
+
+## Device staging (left on phone after session 1, ~4.6 GB, all under /data/local/tmp)
+m1-Image, m1-initramfs.img, m1-arch.raw (raw Arch rootfs, writable disk),
+vm_config_h*.json, vm-h*.log, vm-run*.out. Revert: `adb shell rm -f
+/data/local/tmp/m1-* /data/local/tmp/vm_*`. No VMs running (verified via
+`vm list`). Nothing outside /data/local/tmp touched.

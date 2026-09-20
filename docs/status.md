@@ -50,9 +50,12 @@ MacBook; real-Android-AVF validation explicitly deferred to Phase D).
 Milestone 1 (Mac side): DONE — no blocker. Interactive check passed
 (typing works, Super+Return opens Foot; Super+Q unusable = macOS Cmd+Q host
 collision, not a guest bug).
-Next: Phase D per `docs/pixel-test-plan.md` (Pixel 8 Pro / Android 17, daily
-driver → unrooted `vm`-CLI path only). No device attached yet; session starts
-at D-0 capability probe. Meanwhile Milestone 2 guest work can proceed under UTM.
+Next: Phase D session 1 DONE (see `docs/pixel-test-plan.md`). Proven on Pixel
+8 Pro / Android 17 UNROOTED via official `vm` CLI: custom 7.2.6 kernel boots
+(ttyS0!), raw Arch rootfs to multi-user + sshd. BOUNDARY FOUND: `vm run`
+silently drops gpu/network/vsock (serves blk/console only) → next GPU step
+is the Terminal-app virgl path (D-3b), then custom-guest+GPU via app API.
+4.6 GB staged in /data/local/tmp, no VMs running, phone otherwise untouched.
 
 ## Evidence
 - Host: M4 Pro arm64, macOS 26.6, 48 GB; brew/adb/podman present; no

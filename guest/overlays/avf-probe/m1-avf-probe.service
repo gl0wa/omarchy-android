@@ -1,0 +1,14 @@
+[Unit]
+Description=Milestone 1 AVF diagnostics probe (console dump)
+After=multi-user.target
+ConditionPathExists=/dev/ttyS0
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/m1-avf-probe.sh
+RemainAfterExit=yes
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target
