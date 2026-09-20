@@ -3,6 +3,8 @@
 ## Current milestone
 Milestone 1: aarch64 Arch + systemd + net + persistent storage + accelerated
 vGPU (non-llvmpipe) + Hyprland + Foot + keyboard/pointer, emulator-first.
+**MAC SIDE COMPLETE 2026-09-20** (all criteria met under QEMU/UTM on the
+MacBook; real-Android-AVF validation explicitly deferred to Phase D).
 
 ## Verified working (2026-09-20, Phase A)
 - QEMU 11.1.1 (stock brew) + HVF boots ArchLinuxARM-aarch64 (tarball
@@ -45,10 +47,11 @@ vGPU (non-llvmpipe) + Hyprland + Foot + keyboard/pointer, emulator-first.
   `qemu-usb-keyboard` (+gpio-keys).
 
 ## Current blocker
-Final interactive confirmation needs human eyes/hands (one minute): the UTM
-window should now show Hyprland + Foot instead of tty1. Click in the window,
-type in Foot, try Super+Return (new Foot) / Super+Q (close). Report result —
-that closes Milestone 1 on the Mac side (Pixel/AVF validation stays Phase D).
+Milestone 1 (Mac side): DONE — no blocker. Interactive check passed
+(typing works, Super+Return opens Foot; Super+Q unusable = macOS Cmd+Q host
+collision, not a guest bug).
+Next: Milestone 2 proposal (see `docs/milestone-2-proposal.md`) and, when
+justified, Phase C (crosvm/Cuttlefish on Linux) → Phase D (Pixel/AVF).
 
 ## Evidence
 - Host: M4 Pro arm64, macOS 26.6, 48 GB; brew/adb/podman present; no

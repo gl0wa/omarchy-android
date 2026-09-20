@@ -41,12 +41,25 @@ Notes:
   mapped+visible as native Wayland client. Lesson: never nest `$(id -u)` /
   `set -eu` inside `su -c` double quotes — provision literal files instead.
 
-## Phase B: virgl accel + Hyprland (gated on Phase A + non-llvmpipe)
-- Boot with `-device virtio-gpu-gl-pci`, run `./dev/test-gpu`
-  (`/dev/dri/*`, `dmesg`, `glxinfo -B`, `eglinfo`, `vulkaninfo`).
-  MUST NOT be llvmpipe.
-- Only then: minimal Hyprland (`start-hyprland`, `AQ_DRM_DEVICES`,
-  Foot, keyboard/pointer), logs via `./dev/test-desktop`.
+## Phase B: virgl accel + Hyprland (DONE 2026-09-20, interactive part manual)
+
+1. `host/utm/make-bundle` crafts `omarchy-m1.utm` (virtio-gpu-gl-pci, HVF,
+   8G RAM, kernel/initrd drives, USB tablet/kbd/mouse, SSH 2223) from UTM's
+   source schema. Lessons:
+   - UTM splits `AdditionalArguments` on whitespace (quote-aware) — wrap the
+     multi-word `-append` value in literal double quotes or QEMU tries to
+     open `rw` as an image.
+   - UTM caches parsed config in memory: after ANY rebuild, Cmd+Q + reopen
+     and verify displayed Memory before Start.
+   - Keep the VM UUID stable across rebuilds (registration is by UUID).
+2. `M1_SSH_PORT=2223 ./dev/test-gpu` → `virgl (ANGLE (Apple M4 Pro,
+   OpenGL 4.1 Metal))`, GLES 3.0. NOT llvmpipe. (No Vulkan/venus on this
+   path — fine, Hyprland needs GLES 3.0+ only.)
+3. `M1_SSH_PORT=2223 ./dev/test-desktop` → Hyprland + Xwayland + Foot
+   (native Wayland, mapped/visible), libinput tablet/mouse/keyboard.
+4. Interactive (human): UTM window shows Hyprland+Foot; typing works;
+   Super+Return opens a terminal. NOTE: Super acts as macOS Command, so
+   Super+Q quits UTM itself (host collision, not a guest bug).
 
 ## Phase C/D: Linux crosvm/Cuttlefish, then Pixel
 - Not started. Pixel requires `docs/pixel-test-plan.md` first.

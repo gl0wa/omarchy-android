@@ -7,24 +7,21 @@ accelerated virtual GPU (Mesa, NOT llvmpipe) + Hyprland + Foot + input.
 Omarchy/Quickshell/themes/audio/clipboard/intents are explicitly out of scope.
 
 ## Current state (2026-09-20)
-Research complete; first boot not yet attempted. See:
-- `docs/research/development-environment.md` — emulator-first path decision
-- `docs/architecture.md` — layer map
-- `docs/status.md` — live memory (blocker, hypothesis, next experiment)
-- `docs/bringup.md` — runbook (grows as phases land)
+Milestone 1 Mac side COMPLETE. QEMU headless + UTM accelerated paths both
+work; see `docs/bringup.md` runbook and `docs/status.md` memory.
 
-## Quickstart (Phase A, Mac)
-Requires: Apple Silicon Mac, Homebrew, UTM (or patched QEMU — see bringup).
-Arch rootfs download + first headless boot are not yet automated; follow
-`docs/bringup.md`. Once automated, the interface will be:
+## Quickstart (Mac)
+Requires: Apple Silicon Mac, Homebrew (`brew install qemu`), UTM, podman.
 
 ```sh
-./dev/build        # fetch/assemble minimal Arch ARM guest artifacts
-./dev/boot         # boot headless ARM64 VM (HVF, virtio-blk/net)
-./dev/shell        # SSH into the guest
-./dev/diagnose     # collect dmesg/systemd/net/storage snapshot
+./dev/build        # fetch ArchARM tarball (GPG-verified), assemble ext4→qcow2, stock kernel
+./dev/boot         # headless ARM64 VM (HVF, virtio-blk/net); M1_GPU=2d adds unaccelerated virtio-gpu
+./dev/shell        # SSH as root (key auth); M1_SSH_PORT=2223 for the UTM VM
+./dev/diagnose     # systemd/net/storage/kernel snapshot
+./dev/sync-kernel  # re-extract /boot from qcow2 after any in-guest kernel upgrade (REQUIRED before next boot)
 ./dev/test-gpu     # DRM/Mesa/EGL/Vulkan report (must NOT be llvmpipe)
-./dev/test-desktop # launch minimal Hyprland + Foot, capture logs
+./dev/test-desktop # minimal Hyprland + Foot via seatd/desktop user, captures logs
+host/utm/make-bundle  # (re)build omarchy-m1.utm from current qcow2; then Cmd+Q/reopen UTM, Start
 ```
 
 ## Layout
