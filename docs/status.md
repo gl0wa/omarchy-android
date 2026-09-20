@@ -50,12 +50,18 @@ MacBook; real-Android-AVF validation explicitly deferred to Phase D).
 Milestone 1 (Mac side): DONE — no blocker. Interactive check passed
 (typing works, Super+Return opens Foot; Super+Q unusable = macOS Cmd+Q host
 collision, not a guest bug).
-Next: Phase D session 1 DONE (see `docs/pixel-test-plan.md`). Proven on Pixel
-8 Pro / Android 17 UNROOTED via official `vm` CLI: custom 7.2.6 kernel boots
-(ttyS0!), raw Arch rootfs to multi-user + sshd. BOUNDARY FOUND: `vm run`
-silently drops gpu/network/vsock (serves blk/console only) → next GPU step
-is the Terminal-app virgl path (D-3b), then custom-guest+GPU via app API.
-4.6 GB staged in /data/local/tmp, no VMs running, phone otherwise untouched.
+Next: D-3b COMPLETE 2026-09-20. Answers: (1) NO accelerated graphics in
+supported Terminal on this build — Vulkan llvmpipe, dmesg -virgl
+-context_init, both sentinels inert (shipped Terminal v17 APK lacks the
+sentinel mechanism entirely — dex-verified). (2) Actual path: app-set GPU
+without backend (2D, 1280x720 display service) → Mesa 25.0.7 llvmpipe.
+(3) vm-run vs Terminal: CLI schema can't express gpu/display/net/input
+(serde drops them); only app/API path supplies Surface, TAP, input, vsock.
+(4) D-3c: minimal custom APK via framework VirtualMachineManager APIs with
+GpuConfig{virglrenderer/virgl2} — needs Android SDK build env; SELinux
+surface risk open. See docs/research/vmcli-vs-terminal.md. Phone left clean
+(sentinels/screenshots removed, ANGLE reverted, no VMs running); 4.6 GB
+/data/local/tmp staging preserved per instructions.
 
 ## Evidence
 - Host: M4 Pro arm64, macOS 26.6, 48 GB; brew/adb/podman present; no
@@ -76,6 +82,8 @@ real AVF. QEMU-on-Mac validates packaging; it proves nothing about pKVM.
 ## Experiments attempted
 | date | experiment | result |
 |------|------------|--------|
+| 2026-09-20 | D-3b: Terminal virglrenderer+gfxstream sentinels, ANGLE opt-in, VM restarts | NO EFFECT (both inert; shipped APK v17 lacks sentinel code — dex-verified). dmesg -virgl -context_init persists. Device + screenshots + ANGLE reverted afterwards |
+| 2026-09-20 | D-3b baseline via automated input-text+screencap+vision loop | Debian droid/pwless-sudo, kernel 6.12.92-android16, Mesa 25.0.7, /dev/dri present, Vulkan llvmpipe. Automation lessons: %s+CAPS gets IME-mangled (use keyevent 62 for space); never `--` with input text; MINUS via keyevent 69 |
 | 2026-09-20 | host inventory + 4-way parallel upstream research | done, recorded in `docs/research/development-environment.md` |
 | 2026-09-20 | Phase A-1: stock `brew install qemu`, tarball fetch+MD5, ext4 via podman container (root, no sudo), debugfs key inject, qcow2, direct kernel boot | BOOT OK first try; systemd running; net + DNS ok; SSH ok; poweroff→reboot persistence ok |
 | 2026-09-20 | `dev/boot` backgrounding via `eval` + multiline var | FAILED (fd inheritance hung tool call, quotes broke `-append`); fixed with shell function + plain `&` + file redirs |

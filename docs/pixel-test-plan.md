@@ -158,8 +158,27 @@ Logs: `artifacts/diagnostics/2026-09-20-pixel/`.
   (`m1-avf-probe.sh` + one-shot service dumping systemd/net/DRM/Mesa to
   both serial consoles → lands in the `--console` log, no shell needed).
 
-## Next: D-3b Terminal-app GPU probe (needs: Developer option "Linux
-terminal" + first-run Debian provisioning, all user-revertible app data)
+## D-3b verdict (2026-09-20 — all four stop-condition questions answered)
+1. Accelerated graphics in supported Terminal on THIS Pixel? **NO.**
+   Vulkan GPU0 = llvmpipe (LLVM 19.1.7, Mesa 25.0.7); dmesg `-virgl
+   -context_init`; both sentinels + ANGLE opt-in inert across VM restarts.
+2. Actual path? Terminal app → GpuConfig WITHOUT backend (2D: egl/gles/
+   surfaceless, windowed 1280x720 display service, 4 inputs, tap net,
+   vsock/ttyd bridge, GuestLog journal) → guest DRM (blob caps, no 3D) →
+   llvmpipe. Debian kernel 6.12.92-android16, droid user, passwordless sudo.
+3. vm-run vs Terminal difference? See docs/research/vmcli-vs-terminal.md:
+   CLI schema cannot express gpu/display/net/input (serde drops); only the
+   app/API path provides Surface, TAP, input, vsock. No flag promotes CLI.
+4. Smallest credible route to Arch + same GPU? **D-3c: minimal custom APK**
+   driving framework VirtualMachineManager custom-image APIs with
+   GpuConfig{backend=virglrenderer, context_types=[virgl2]} + DisplayConfig
+   (platform supports it; Terminal dex references setGpuConfig). Needs
+   Android SDK build env on Mac. Open risk: third-party SELinux surface
+   sharing (PocketVM needed KernelSU rules). Check first whether Terminal
+   itself accepts custom disk/kernel (keeps priv-app domain).
+Evidence: artifacts/diagnostics/2026-09-20-terminal/ (crosvm baseline line,
+/dev/dri + llvmpipe + kernel screenshots). Phone reverted (sentinels,
+screenshots, ANGLE) except preserved /data/local/tmp staging.
 Rationale (layer attribution): current Android documents GPU ONLY via the
 Terminal app (`/sdcard/linux/virglrenderer` file + ANGLE for Terminal).
 Proving virgl under stock Debian isolates "AVF GPU works on this device"
