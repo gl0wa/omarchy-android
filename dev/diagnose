@@ -1,0 +1,5 @@
+#!/bin/sh
+# dev/diagnose — collect dmesg/systemd/net/storage snapshot. Stub.
+set -eu
+echo "dev/diagnose: not implemented yet — guest not booted." >&2
+exit 1

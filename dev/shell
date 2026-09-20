@@ -1,0 +1,5 @@
+#!/bin/sh
+# dev/shell — SSH into the guest. Stub.
+set -eu
+echo "dev/shell: not implemented yet — guest not booted." >&2
+exit 1

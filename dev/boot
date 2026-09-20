@@ -1,0 +1,5 @@
+#!/bin/sh
+# dev/boot — boot headless ARM64 VM (HVF, virtio-blk/net). Stub.
+set -eu
+echo "dev/boot: not implemented yet — see docs/bringup.md Phase A-1." >&2
+exit 1

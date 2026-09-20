@@ -1,0 +1,8 @@
+#!/bin/sh
+# dev/test-gpu — DRM/Mesa/EGL/Vulkan report. Success MUST NOT be llvmpipe.
+# Runs inside the guest once booted; this host stub only checks readiness.
+set -eu
+echo "dev/test-gpu: not implemented yet — gated on Phase A boot + Phase B virgl." >&2
+echo "Guest criteria: /dev/dri/card0+renderD128, glxinfo -B shows" >&2
+echo "virgl/Virtio GPU/Venus with 'Accelerated: yes' (never llvmpipe)." >&2
+exit 1

@@ -1,0 +1,8 @@
+# Build outputs, images, and captured logs are never committed.
+guest/image/
+guest/rootfs/
+*.qcow2
+*.img
+*.raw
+artifacts/
+.DS_Store

@@ -1,0 +1,7 @@
+#!/bin/sh
+# dev/build — fetch/assemble minimal Arch ARM guest artifacts (Phase A).
+# Not yet implemented (Phase A-1 pending). This stub fails with guidance.
+set -eu
+echo "dev/build: not implemented yet — see docs/bringup.md Phase A-1." >&2
+echo "Next: install QEMU provider, fetch ArchLinuxARM-aarch64-latest.tar.gz." >&2
+exit 1

@@ -1,0 +1,6 @@
+#!/bin/sh
+# dev/test-desktop — launch minimal Hyprland + Foot, capture logs. Stub.
+# Gated on accelerated graphics (dev/test-gpu passing, non-llvmpipe).
+set -eu
+echo "dev/test-desktop: not implemented yet — gated on dev/test-gpu." >&2
+exit 1
