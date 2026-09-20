@@ -19,12 +19,24 @@ vGPU (non-llvmpipe) + Hyprland + Foot + keyboard/pointer, emulator-first.
 - Packaging (no aarch64 gaps): `pacman -Syu` ok after `pacman-key --init` +
   `--populate archlinuxarm`; installed mesa 26.2.3, vulkan-virtio 26.2.3,
   hyprland 0.56.2, foot 1.28.0, mesa-utils, vulkan-tools, pciutils.
+- Tarball GPG-verified: good sig from `Arch Linux ARM Build System`, key
+  `68B3537F…2BDBE6A6` (fingerprint match; WoT N/A). `dev/build` verifies in-container.
+- Kernel-sync procedure: guest `-Syu` 7.1.6→7.2.6 broke net (modules vs booted
+  kernel); `dev/sync-kernel` dumps /boot from qcow2 offline. Booting 7.2.6 now.
+- 2D negative control (`M1_GPU=2d`, virtio-gpu-pci): `/dev/dri/card0` +
+  `renderD128` appear; `dev/test-gpu` reports llvmpipe GLES 3.2 (expected —
+  proves harness + DRM path, NOT the milestone).
+- Desktop harness validated on llvmpipe: Hyprland starts (DRM backend,
+  Xwayland up), `foot` client mapped+visible, native Wayland (`xwayland: 0`),
+  `hyprctl clients` works via seatd + `desktop` user. Renderer is the ONLY
+  missing piece (must become virgl, not llvmpipe).
 
 ## Current blocker
-UTM GPU VM (`omarchy-m1`, virtio-gpu-gl-pci, bundle crafted from UTM source
-schema) is registered but not started: `utmctl` gets OSStatus -1743
-(AppleEvents TCC consent missing). Waiting on one-time macOS Automation
-grant (user approved). Fallback: press Start in the UTM window manually.
+virgl acceleration needs the UTM GPU VM (`omarchy-m1`, virtio-gpu-gl-pci).
+Two automation routes exhausted: `utmctl` needs a TCC Automation grant that
+never prompts (-1743, no Settings entry); `QEMULauncher` is an XPC-service
+binary (SIGTRAP in libsystem_secinit on direct exec). Remaining: ONE manual
+click on Start in the UTM window (VM is registered). No settings changes.
 
 ## Evidence
 - Host: M4 Pro arm64, macOS 26.6, 48 GB; brew/adb/podman present; no
@@ -51,12 +63,17 @@ real AVF. QEMU-on-Mac validates packaging; it proves nothing about pKVM.
 | 2026-09-20 | root/`root` SSH password | FAILED (sshd default blocks); `alarm`/`alarm` ok, root key ok |
 | 2026-09-20 | `pacman-key --init/populate`, `-Syu`, install mesa/hyprland/foot set | OK (mesa 26.2.3, hyprland 0.56.2, foot 1.28.0) |
 | 2026-09-20 | UTM GPU path: `host/utm/make-bundle` crafts `omarchy-m1.utm` (virtio-gpu-gl-pci, HVF, kernel/initrd drives, port 2223) from UTM source schema | bundle valid, registered in UTM; start blocked on TCC (-1743) |
+| 2026-09-20 | OBS: SSH banner timeout after -Syu → HYPO: kernel/modules mismatch (7.1.6 booted, 7.2.6 on disk, virtio_net=m) → EXP: `dev/sync-kernel` + reboot | CONFIRMED: 7.2.6 boots, net back. Procedure documented |
+| 2026-09-20 | `M1_GPU=2d` + `dev/test-gpu` | /dev/dri ok, llvmpipe as expected (negative control); fixed verdict false-positive (PCI desc ≠ renderer) |
+| 2026-09-20 | `QEMULauncher` direct exec to bypass UTM app | FAILED (SIGTRAP in secinit — XPC-service binary, not directly runnable) |
+| 2026-09-20 | `dev/test-desktop` on llvmpipe (harness validation) | Hyprland UP, Xwayland UP, foot mapped+visible native Wayland; fixed 3 script bugs (chmod /run/user/0 via set -eu; RUNDIR as root; nested quoting → provisioned launcher file) |
 
 ## Next experiment
-Phase B-2: start `omarchy-m1` in UTM (needs Automation grant), SSH to port
-2223, run `M1_SSH_PORT=2223 ./dev/test-gpu` — expect `/dev/dri/card0` +
-Mesa `virgl` (NOT llvmpipe). If UTM passes `venus=true` and its QEMU/host
-rejects it, disable via `defaults write com.utmapp.UTM QEMUVulkanDriver -int 1`.
+Phase B-2: ONE manual Start of `omarchy-m1` in UTM → `M1_SSH_PORT=2223
+./dev/test-gpu` (expect Mesa `virgl`, `Accelerated: yes`) → `M1_SSH_PORT=2223
+./dev/test-desktop` (same harness, accelerated) → keyboard/pointer check.
+If UTM passes `venus=true` and its QEMU/host rejects it, disable via
+`defaults write com.utmapp.UTM QEMUVulkanDriver -int 1`.
 
 ## Deferred work
 Omarchy install/debug, Quickshell, themes, launchers, audio, clipboard,

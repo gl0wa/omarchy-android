@@ -16,11 +16,14 @@ OUT="$ROOT/artifacts/diagnostics/test-gpu-$(date +%Y%m%d-%H%M%S).log"
   echo "=== vulkaninfo summary"; vulkaninfo --summary 2>&1 | grep -iE "GPU|driver|ERROR|failed" | head -20
 ' 2>/dev/null | tee "$OUT"
 echo "--- verdict ---"
-if grep -qiE "llvmpipe|softpipe|swrast|SwiftShader|LVP" "$OUT" \
-   && ! grep -qiE "virgl|Virtio GPU|Venus" "$OUT"; then
-  echo "SOFTWARE RENDERER (llvmpipe) — graphics NOT solved."
-elif grep -qiE "virgl|Virtio GPU|Venus" "$OUT"; then
+# NOTE: PCI description "Virtio GPU" (lspci/dmesg) proves the DEVICE exists,
+# not acceleration. Only Mesa RENDERER strings count.
+RENDERERS="$(grep -iE "^OpenGL.*renderer:|^OpenGL ES.*renderer:|GPU[0-9 ]*:" "$OUT")"
+echo "$RENDERERS"
+if echo "$RENDERERS" | grep -qiE "virgl|venus|zink.*virtio"; then
   echo "ACCELERATED renderer visible — check details above."
+elif echo "$RENDERERS" | grep -qiE "llvmpipe|softpipe|swrast|lava?pipe|SwiftShader"; then
+  echo "SOFTWARE RENDERER (llvmpipe) — graphics NOT solved."
 else
   echo "INCONCLUSIVE — inspect $OUT."
 fi

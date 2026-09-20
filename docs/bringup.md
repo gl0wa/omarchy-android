@@ -25,6 +25,21 @@ Notes:
 - QEMU backgrounding lesson: never `eval` a multiline command with `&`
   (fd inheritance hangs the caller, quotes break); use a shell function with
   file redirections (see `dev/boot` history).
+- Kernel upgrades: after ANY in-guest `linux-aarch64` upgrade, run
+  `./dev/sync-kernel` (dumps /boot/Image+initramfs from qcow2 via debugfs in
+  a container) BEFORE next boot. Symptom of mismatch: TCP connects, SSH
+  banner never arrives (virtio_net module won't load against old kernel).
+
+## Phase A-2: 2D GPU baseline + desktop harness (DONE 2026-09-20)
+
+- `M1_GPU=2d ./dev/boot` adds `-device virtio-gpu-pci -vga none` → guest
+  shows `/dev/dri/card0+renderD128`; `./dev/test-gpu` reports llvmpipe
+  (negative control — verdict logic keys ONLY on Mesa renderer strings,
+  never on PCI/dmesg device names).
+- `./dev/test-desktop` (seatd + `desktop` user + provisioned
+  `launch-hyprland.sh`): Hyprland starts on llvmpipe, Xwayland up, `foot`
+  mapped+visible as native Wayland client. Lesson: never nest `$(id -u)` /
+  `set -eu` inside `su -c` double quotes — provision literal files instead.
 
 ## Phase B: virgl accel + Hyprland (gated on Phase A + non-llvmpipe)
 - Boot with `-device virtio-gpu-gl-pci`, run `./dev/test-gpu`

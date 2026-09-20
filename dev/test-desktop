@@ -1,43 +1,36 @@
 #!/bin/sh
 # dev/test-desktop — minimal Hyprland + Foot smoke test.
-# GATED on dev/test-gpu reporting an ACCELERATED (non-llvmpipe) renderer.
+# GATED on dev/test-gpu reporting an ACCELERATED (non-llvmpipe) renderer
+# (override: M1_ALLOW_LLVMPIPE=1 for harness validation on software GL).
 # Uses seatd (no logind seat over SSH) + unprivileged user `desktop`.
 # Env: M1_SSH_PORT (2222 headless QEMU, 2223 UTM GPU VM).
 set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/artifacts/diagnostics/test-desktop-$(date +%Y%m%d-%H%M%S).log"
-HCONF="$ROOT/guest/overlays/desktop/dotconfig/hypr/hyprland.conf"
-FCONF="$ROOT/guest/overlays/desktop/dotconfig/foot/foot.ini"
+OVL="$ROOT/guest/overlays/desktop"
 
 echo "== provisioning seatd + desktop user =="
 "$ROOT/dev/shell" '
   set -eu
-  id desktop >/dev/null 2>&1 || {
-    pacman -S --noconfirm seatd
-    useradd -m desktop
-    usermod -aG video,seat,input desktop
-    systemctl enable --now seatd
-  }
-  install -d -o desktop -g desktop /home/desktop/.config/hypr /home/desktop/.config/foot
+  pacman -Qq seatd >/dev/null 2>&1 || pacman -S --noconfirm seatd
+  id desktop >/dev/null 2>&1 || useradd -m desktop
+  usermod -aG video,seat,input desktop
+  systemctl enable --now seatd
+  install -d -o desktop -g desktop /home/desktop/.config/hypr /home/desktop/.config/foot /home/desktop/.local/bin
 ' 2>/dev/null
 echo "== installing configs =="
-"$ROOT/dev/shell" 'cat > /home/desktop/.config/hypr/hyprland.conf' < "$HCONF" 2>/dev/null
-"$ROOT/dev/shell" 'cat > /home/desktop/.config/foot/foot.ini && chown -R desktop:desktop /home/desktop/.config' < "$FCONF" 2>/dev/null
+"$ROOT/dev/shell" 'cat > /home/desktop/.config/hypr/hyprland.conf' < "$OVL/dotconfig/hypr/hyprland.conf" 2>/dev/null
+"$ROOT/dev/shell" 'cat > /home/desktop/.config/foot/foot.ini' < "$OVL/dotconfig/foot/foot.ini" 2>/dev/null
+"$ROOT/dev/shell" 'cat > /home/desktop/.local/bin/launch-hyprland.sh && chown -R desktop:desktop /home/desktop/.config /home/desktop/.local && chmod +x /home/desktop/.local/bin/launch-hyprland.sh' < "$OVL/dotlocal/bin/launch-hyprland.sh" 2>/dev/null
 
-echo "== launching Hyprland (see $OUT) =="
+echo "== launching Hyprland =="
 "$ROOT/dev/shell" '
+  set -eu
   pkill -u desktop Hyprland 2>/dev/null || true
   sleep 1
-  su - desktop -c "
-    set -eu
-    RUNDIR=/run/user/$(id -u)
-    mkdir -p $RUNDIR
-    chmod 700 $RUNDIR
-    export XDG_RUNTIME_DIR=$RUNDIR
-    export AQ_DRM_DEVICES=/dev/dri/card0
-    nohup Hyprland > ~/hyprland.log 2>&1 &
-    echo started
-  "
+  install -d -o desktop -g desktop -m 700 /run/user/1001
+  nohup su -s /bin/sh desktop -c /home/desktop/.local/bin/launch-hyprland.sh >/dev/null 2>&1 &
+  echo launched
 ' 2>/dev/null
 sleep 20
 "$ROOT/dev/shell" '
@@ -48,9 +41,8 @@ sleep 20
   echo "=== clients ==="
   SIG=$(ls /run/user/*/hypr/*/hyprland.lock 2>/dev/null | head -1)
   if [ -n "$SIG" ]; then
-    export HYPRLAND_INSTANCE_SIGNATURE=$(basename $(dirname $SIG))
-    export XDG_RUNTIME_DIR=$(dirname $(dirname $SIG))
-    su - desktop -c "HYPRLAND_INSTANCE_SIGNATURE=$HYPRLAND_INSTANCE_SIGNATURE XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR hyprctl clients 2>&1 | head -20"
+    HSIG=$(basename "$(dirname "$SIG")"); RDIR=$(dirname "$(dirname "$SIG")")
+    su -s /bin/sh desktop -c "HYPRLAND_INSTANCE_SIGNATURE=$HSIG XDG_RUNTIME_DIR=$RDIR hyprctl clients 2>&1" | head -20
   else
     echo "(no hyprland socket yet)"
   fi

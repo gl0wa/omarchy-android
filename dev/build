@@ -2,9 +2,9 @@
 # dev/build — assemble the minimal Arch ARM guest artifacts (Phase A).
 #
 # Does (idempotently where cheap):
-#   1. fetch ArchLinuxARM-aarch64-latest.tar.gz, verify MD5
-#      (GPG .sig verification: no gpg on stock macOS; MD5 is freshness-only —
-#      see docs/research/development-environment.md)
+#   1. fetch ArchLinuxARM-aarch64-latest.tar.gz + .sig, verify MD5 on host,
+#      verify GPG detached sig in-container (key 68B3537F39A313B3E574D0677
+#      193F152BDBE6A6, fingerprint-checked; WoT trust N/A — same as Arch model)
 #   2. ensure podman machine is running (ext4 assembly needs Linux)
 #   3. extract tarball as root inside a native-arm64 debian container and
 #      build a 6G ext4 image with mkfs.ext4 -d (correct uids/modes, no sudo)
@@ -18,6 +18,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 URL="http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz"
 MD5_EXPECT="23eec86365b24f7913c403e8f4e8719b"
 TARBALL="$ROOT/guest/rootfs/ArchLinuxARM-aarch64-latest.tar.gz"
+SIG="$ROOT/guest/rootfs/tarball.sig"
 RAW="$ROOT/guest/rootfs/archroot.ext4"
 QCOW2="$ROOT/guest/image/archroot.qcow2"
 KEY="$HOME/.ssh/omarchy_android_ed25519"
@@ -30,6 +31,7 @@ mkdir -p "$ROOT/guest/rootfs" "$ROOT/guest/image" "$ROOT/guest/kernel"
 if [ ! -f "$TARBALL" ]; then
   echo "dev/build: downloading Arch ARM rootfs (~830MB)…"
   curl -sL --fail "$URL" -o "$TARBALL"
+  curl -sL --fail "$URL.sig" -o "$SIG"
 fi
 ACTUAL="$(md5 -q "$TARBALL")"
 [ "$ACTUAL" = "$MD5_EXPECT" ] || { echo "dev/build: MD5 mismatch: $ACTUAL" >&2; exit 1; }
@@ -44,11 +46,13 @@ podman machine list 2>/dev/null | grep -q "Currently running" \
   || { echo "dev/build: starting podman machine…"; podman machine start; }
 
 if [ ! -f "$RAW" ]; then
-  echo "dev/build: assembling ext4 image (extraction as root in container)…"
+  echo "dev/build: verifying GPG signature + assembling ext4 image…"
   podman run --rm -v "$ROOT/guest/rootfs:/work:rw" -v "$PUB:/key.pub:ro" \
     docker.io/library/debian:trixie-slim bash -c "
       set -eu
-      apt-get update -qq && apt-get install -y -qq e2fsprogs libarchive-tools >/dev/null 2>&1
+      apt-get update -qq && apt-get install -y -qq e2fsprogs libarchive-tools gnupg dirmngr >/dev/null 2>&1
+      gpg --keyserver keyserver.ubuntu.com --recv-keys 68B3537F39A313B3E574D06777193F152BDBE6A6 >/dev/null 2>&1
+      gpg --verify /work/tarball.sig /work/ArchLinuxARM-aarch64-latest.tar.gz
       rm -rf /rootfs && mkdir -p /rootfs
       bsdtar -xpf /work/ArchLinuxARM-aarch64-latest.tar.gz -C /rootfs
       mkfs.ext4 -q -d /rootfs -L archroot /work/archroot.ext4 6G

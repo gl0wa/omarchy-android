@@ -2,6 +2,8 @@
 # dev/boot — boot the Phase-A headless ARM64 VM (QEMU virt + HVF).
 # Usage: dev/boot [--foreground]
 # Default: background, serial console to artifacts/diagnostics/last-boot/.
+# Env: M1_GPU=2d adds an UNACCELERATED virtio-gpu (negative control for
+# graphics work: expect /dev/dri present but Mesa llvmpipe). Default: no GPU.
 set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 QCOW2="$ROOT/guest/image/archroot.qcow2"
@@ -22,6 +24,9 @@ rm -f "$LOGDIR/mon.sock"
 
 run_qemu() {
   # extra serial/monitor args passed as "$@"
+  if [ "${M1_GPU:-}" = "2d" ]; then
+    set -- "$@" -device virtio-gpu-pci -vga none
+  fi
   qemu-system-aarch64 \
     -M virt -cpu host -accel hvf -m 2048 -smp 4 \
     -kernel "$KERNEL" -initrd "$INITRD" \

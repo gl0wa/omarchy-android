@@ -1,0 +1,31 @@
+#!/bin/sh
+# dev/sync-kernel — copy /boot/Image + initramfs from INSIDE the qcow2 to
+# guest/kernel/boot/ (used by dev/boot -kernel).
+#
+# Why: dev/boot direct-boots host-side kernel files. Any in-guest kernel
+# upgrade (pacman -Syu) makes on-disk modules mismatch the booted kernel
+# (virtio_net is a module → networking silently dies). Re-run this after
+# every guest kernel upgrade. Offline: needs qemu-img + podman (debugfs).
+# Leaves guest/image/.sync.tmp.raw (6G sparse) — delete to reclaim space.
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+QCOW2="$ROOT/guest/image/archroot.qcow2"
+KDIR="$ROOT/guest/kernel/boot"
+[ -f "$QCOW2" ] || { echo "dev/sync-kernel: missing $QCOW2 — run dev/build first." >&2; exit 1; }
+
+echo "dev/sync-kernel: converting qcow2 to raw temp…"
+qemu-img convert -O raw "$QCOW2" "$ROOT/guest/image/.sync.tmp.raw"
+mkdir -p "$ROOT/guest/image/.ksync"
+podman run --rm -v "$ROOT/guest/image:/work:rw" docker.io/library/debian:trixie-slim bash -c "
+  set -eu
+  apt-get update -qq && apt-get install -y -qq e2fsprogs >/dev/null 2>&1
+  debugfs -R 'dump /boot/Image /work/.ksync/Image' /work/.sync.tmp.raw
+  debugfs -R 'dump /boot/initramfs-linux.img /work/.ksync/initramfs-linux.img' /work/.sync.tmp.raw
+  debugfs -R 'ls -l /boot' /work/.sync.tmp.raw
+" 2>&1 | tail -n 8
+mkdir -p "$KDIR"
+mv "$ROOT/guest/image/.ksync/Image" "$KDIR/Image"
+mv "$ROOT/guest/image/.ksync/initramfs-linux.img" "$KDIR/initramfs-linux.img"
+rmdir "$ROOT/guest/image/.ksync"
+echo "dev/sync-kernel: done."
+ls -l "$KDIR"
