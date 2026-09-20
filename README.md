@@ -1,5 +1,8 @@
 # omarchy-android — Milestone 1: Arch ARM + accelerated Hyprland under AVF-like VMs
 
+> NOTE: no license file yet — all rights reserved until one is added.
+> Do not treat this as open source until then.
+
 Long-term goal: Omarchy-style Arch Linux ARM64 desktop inside Android via
 Android Virtualization Framework (AVF). **Milestone 1 scope is only the
 foundation**: aarch64 Arch Linux + systemd + networking + persistent storage +

@@ -84,7 +84,8 @@ TAP priv-gated (useNetwork=false); console via getConsoleOutput stream +
 run-as; per-app virtmgr (`virtmgr_<pkg>`); force-stop kills its VMs.
 
 Pixel lessons (do NOT rediscover):
-- `export ANDROID_SERIAL=38091FDJG009PB` (stale wireless entries confuse adb).
+- `export ANDROID_SERIAL=<serial>` (from `adb devices`; stale wireless
+  entries confuse adb when several transports are listed).
 - Quote remote globs (`adb shell 'rm -f /sdcard/m1-*.png'`) — local zsh eats them.
 - `input text` IME pitfalls: no `%s`+CAPS (use keyevent 62 for space),
   no `--`, MINUS via keyevent 69; tap (500,400)-ish refocuses Terminal.
