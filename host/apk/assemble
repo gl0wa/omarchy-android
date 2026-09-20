@@ -1,0 +1,43 @@
+#!/bin/sh
+# host/apk/assemble — build + install + grant the M1 host APK.
+# Env: ANDROID_SERIAL selects the device. JAVA_HOME defaults to brew openjdk@21.
+set -eu
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+APKDIR="$ROOT/host/apk"
+export JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk@21}"
+export PATH="$JAVA_HOME/bin:$PATH"
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+export ANDROID_SERIAL="${ANDROID_SERIAL:-38091FDJG009PB}"
+
+command -v adb >/dev/null 2>&1 || { echo "missing host dep: adb" >&2; exit 1; }
+[ -d "$ANDROID_HOME/platforms" ] || { echo "missing SDK platforms ($ANDROID_HOME)" >&2; exit 1; }
+
+# Gradle dist (user-level cache inside host/apk, gitignored).
+if [ ! -x "$APKDIR/gradle-dist/bin/gradle" ]; then
+  echo "assemble: fetching Gradle 8.9…"
+  mkdir -p "$APKDIR/gradle-dist"
+  curl -sL --fail https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /tmp/gradle-8.9.zip
+  unzip -q -o /tmp/gradle-8.9.zip -d /tmp/gradle-dl
+  mv /tmp/gradle-dl/gradle-8.9/* "$APKDIR/gradle-dist/"
+fi
+
+echo "assemble: building…"
+"$APKDIR/gradle-dist/bin/gradle" -p "$APKDIR" :app:assembleDebug 2>&1 | tail -n 5
+APK="$APKDIR/app/build/outputs/apk/debug/app-debug.apk"
+[ -f "$APK" ] || { echo "assemble: APK missing after build" >&2; exit 1; }
+
+echo "assemble: installing…"
+adb install -r -d "$APK" 2>&1 | tail -n 1
+PKG="dev.omarchy.m1host"
+echo "assemble: granting custom-VM permissions…"
+adb shell pm grant "$PKG" android.permission.MANAGE_VIRTUAL_MACHINE 2>&1
+adb shell pm grant "$PKG" android.permission.USE_CUSTOM_VIRTUAL_MACHINE 2>&1
+echo "assemble: hidden API policy (reversible global setting)…"
+adb shell settings put global hidden_api_policy 1 2>&1
+echo "assemble: ANGLE opt-in for $PKG (reversible)…"
+adb shell settings put global angle_debug_package org.chromium.angle 2>&1
+adb shell settings put global angle_gl_driver_selection_pkgs "$PKG" 2>&1
+adb shell settings put global angle_gl_driver_selection_values angle 2>&1
+echo "assemble: launching…"
+adb shell am start -n "$PKG/.MainActivity" 2>&1 | tail -n 1
+echo "assemble: done. watch: adb logcat -s M1HOST"

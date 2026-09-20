@@ -192,3 +192,28 @@ m1-Image, m1-initramfs.img, m1-arch.raw (raw Arch rootfs, writable disk),
 vm_config_h*.json, vm-h*.log, vm-run*.out. Revert: `adb shell rm -f
 /data/local/tmp/m1-* /data/local/tmp/vm_*`. No VMs running (verified via
 `vm list`). Nothing outside /data/local/tmp touched.
+
+## D-3c verdict (2026-09-20 — custom host APK, host/apk/)
+Built minimal unrooted APK (reflection over @hide VirtualMachine* APIs,
+SDK 37.2-beta2 + JDK 21 on Mac) driving the same calls as Terminal, with our
+staged kernel/initrd/raw disk + GpuConfig + DisplayConfig. Evidence:
+artifacts/diagnostics/2026-09-20-pixel/app-gfxstream-console.log.
+- App path works unrooted: permissions grantable, hidden APIs reachable
+  (hidden_api_policy=1), direct /data/local/tmp paths accepted, VM
+  create/run/stop, console+log streams, match_host honored, all input devices.
+- virglrenderer/virgl2 → host crosvm SIGABRT in v_gpu thread on EVERY run:
+  `Failed to create virtio gpu worker thread: invalid rutabaga build parameters`.
+  No virglrenderer library ships on this build. (Why Terminal never sets a
+  backend here — its APK also lacks the sentinel code.)
+- gfxstream → boots clean BUT zero host 3D contexts: `No virgl contexts
+  available on host`, llvmpipe GL/GLES, Vulkan finds no GPUs (no Venus).
+- MPAM: app-path match_host exposes Tensor MPAM → t=0 panic (`d538a481`);
+  `arm64.nompam` fixes. vm-run path never hit it (default CPU model).
+- TAP network remains priv-gated for third-party apps (useNetwork=false used).
+CONCLUSION: platform build lacks any functional custom-guest 3D path.
+Retry condition: newer OS build shipping qualified virglrenderer (watch for
+the sentinel mechanism appearing in Terminal APK) — not more experiments now.
+Hyprland-on-Pixel stays blocked on host 3D, NOT on our guest stack (proven
+on Mac: virgl + Hyprland + Foot + input).
+Phone restored: APK uninstalled, ANGLE + hidden_api_policy reverted, no VMs
+running; 4.6 GB /data/local/tmp staging preserved per instructions.

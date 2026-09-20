@@ -7,3 +7,8 @@ guest/kernel/
 *.raw
 artifacts/
 .DS_Store
+
+# gradle dist + build outputs
+/host/apk/gradle-dist/
+/host/apk/.gradle/
+/host/apk/app/build/

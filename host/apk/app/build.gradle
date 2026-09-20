@@ -1,0 +1,20 @@
+plugins {
+    id("com.android.application")
+}
+
+android {
+    namespace = "dev.omarchy.m1host"
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = "dev.omarchy.m1host"
+        minSdk = 33
+        targetSdk = 36
+        versionCode = 1
+        versionName = "1.0"
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
