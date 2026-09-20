@@ -50,8 +50,9 @@ MacBook; real-Android-AVF validation explicitly deferred to Phase D).
 Milestone 1 (Mac side): DONE — no blocker. Interactive check passed
 (typing works, Super+Return opens Foot; Super+Q unusable = macOS Cmd+Q host
 collision, not a guest bug).
-Next: Milestone 2 proposal (see `docs/milestone-2-proposal.md`) and, when
-justified, Phase C (crosvm/Cuttlefish on Linux) → Phase D (Pixel/AVF).
+Next: Phase D per `docs/pixel-test-plan.md` (Pixel 8 Pro / Android 17, daily
+driver → unrooted `vm`-CLI path only). No device attached yet; session starts
+at D-0 capability probe. Meanwhile Milestone 2 guest work can proceed under UTM.
 
 ## Evidence
 - Host: M4 Pro arm64, macOS 26.6, 48 GB; brew/adb/podman present; no
