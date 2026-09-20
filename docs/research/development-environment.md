@@ -42,7 +42,10 @@ physical Pixel. Statuses: CONFIRMED / LIKELY / UNKNOWN / REQUIRES PHYSICAL DEVIC
 - gfxstream (`libgfxstream_backend.so`) exists in AOSP and the Terminal app's
   "Graphics Acceleration" toggle suggests a gfxstream path for custom guests,
   but it is NOT documented in `custom_vm.md`. Treat as LIKELY-available but
-  unproven until tested on device.
+  unproven until tested on device. UPDATE 2026-09-20: TESTED on Pixel 8 Pro /
+  CP41.260828.004.A8 via custom host APK — virglrenderer backend SIGABRTs
+  host crosvm (rutabaga params unbuilt), gfxstream serves zero 3D contexts
+  (llvmpipe). Neither path accelerates on this build; see pixel-test-plan.
 - PocketVM (https://github.com/okhsunrog/pocketvm) confirms the practical
   shape: app -> `VirtualizationService` -> per-app `virtmgr` -> `crosvm` from
   `com.android.virt` APEX, guests unprotected, virtio on PCI, `vm run` works
@@ -118,7 +121,8 @@ physical Pixel. Statuses: CONFIRMED / LIKELY / UNKNOWN / REQUIRES PHYSICAL DEVIC
   Lima/UTM Linux guests (M3+ gate; UTM 4.6 notes), so a Lima/UTM Linux VM
   exposing `/dev/kvm` could host crosvm/Cuttlefish builds locally — but with
   virt overhead and still no protection. A remote ARM64+KVM Linux box is the
-  frictionless alternative. LIKELY workable; not yet attempted.
+  frictionless alternative. Untried and now DEPRIORITIZED (2026-09-20): the
+  Pixel app path answers AVF questions directly without a Linux detour.
 
 ### 3e. PocketVM without hardware — PARTIAL (CONFIRMED)
 
