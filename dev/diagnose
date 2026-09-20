@@ -1,5 +1,14 @@
 #!/bin/sh
-# dev/diagnose — collect dmesg/systemd/net/storage snapshot. Stub.
+# dev/diagnose — collect systemd/net/storage/kernel snapshot from the guest.
+# Saves to artifacts/diagnostics/diagnose-<timestamp>.log and prints it.
 set -eu
-echo "dev/diagnose: not implemented yet — guest not booted." >&2
-exit 1
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+OUT="$ROOT/artifacts/diagnostics/diagnose-$(date +%Y%m%d-%H%M%S).log"
+"$ROOT/dev/shell" "
+  echo '=== uname'; uname -a
+  echo '=== systemd'; systemctl is-system-running; systemctl --failed --no-legend
+  echo '=== net'; ip -4 -brief addr; ip route show default
+  echo '=== dns/ping'; ping -c2 -W4 1.1.1.1 | tail -1; ping -c1 -W4 archlinuxarm.org | tail -1
+  echo '=== storage'; df -h / | tail -1; lsblk -o NAME,SIZE,TYPE,MOUNTPOINT
+  echo '=== kernel virtio'; dmesg | grep -iE 'virtio|drm' | head -20
+" 2>/dev/null | tee "$OUT"

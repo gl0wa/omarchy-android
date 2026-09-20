@@ -1,5 +1,43 @@
 #!/bin/sh
-# dev/boot — boot headless ARM64 VM (HVF, virtio-blk/net). Stub.
+# dev/boot — boot the Phase-A headless ARM64 VM (QEMU virt + HVF).
+# Usage: dev/boot [--foreground]
+# Default: background, serial console to artifacts/diagnostics/last-boot/.
 set -eu
-echo "dev/boot: not implemented yet — see docs/bringup.md Phase A-1." >&2
-exit 1
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+QCOW2="$ROOT/guest/image/archroot.qcow2"
+KERNEL="$ROOT/guest/kernel/boot/Image"
+INITRD="$ROOT/guest/kernel/boot/initramfs-linux.img"
+LOGDIR="$ROOT/artifacts/diagnostics/last-boot"
+
+command -v qemu-system-aarch64 >/dev/null 2>&1 \
+  || { echo "dev/boot: missing host dep: qemu-system-aarch64 (brew install qemu)" >&2; exit 1; }
+for f in "$QCOW2" "$KERNEL" "$INITRD"; do
+  [ -f "$f" ] || { echo "dev/boot: missing $f — run dev/build first." >&2; exit 1; }
+done
+if [ -f "$LOGDIR/qemu.pid" ] && ps -p "$(cat "$LOGDIR/qemu.pid")" >/dev/null 2>&1; then
+  echo "dev/boot: already running (pid $(cat "$LOGDIR/qemu.pid"))." >&2; exit 1
+fi
+mkdir -p "$LOGDIR"
+rm -f "$LOGDIR/mon.sock"
+
+run_qemu() {
+  # extra serial/monitor args passed as "$@"
+  qemu-system-aarch64 \
+    -M virt -cpu host -accel hvf -m 2048 -smp 4 \
+    -kernel "$KERNEL" -initrd "$INITRD" \
+    -append "root=/dev/vda rw rootwait console=ttyAMA0,115200" \
+    -drive "file=$QCOW2,if=virtio,format=qcow2" \
+    -nic user,model=virtio-net-pci,hostfwd=tcp::2222-:22 \
+    -display none "$@"
+}
+
+if [ "${1:-}" = "--foreground" ]; then
+  run_qemu -serial mon:stdio -monitor none
+else
+  run_qemu -serial "file:$LOGDIR/console.log" \
+    -monitor "unix:$LOGDIR/mon.sock,server,nowait" \
+    >"$LOGDIR/qemu.stdout.log" 2>&1 &
+  echo $! > "$LOGDIR/qemu.pid"
+  echo "dev/boot: started pid $(cat "$LOGDIR/qemu.pid"), console: $LOGDIR/console.log"
+  echo "dev/boot: wait ~30s, then run dev/shell."
+fi

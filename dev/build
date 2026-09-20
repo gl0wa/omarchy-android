@@ -1,7 +1,69 @@
 #!/bin/sh
-# dev/build — fetch/assemble minimal Arch ARM guest artifacts (Phase A).
-# Not yet implemented (Phase A-1 pending). This stub fails with guidance.
+# dev/build — assemble the minimal Arch ARM guest artifacts (Phase A).
+#
+# Does (idempotently where cheap):
+#   1. fetch ArchLinuxARM-aarch64-latest.tar.gz, verify MD5
+#      (GPG .sig verification: no gpg on stock macOS; MD5 is freshness-only —
+#      see docs/research/development-environment.md)
+#   2. ensure podman machine is running (ext4 assembly needs Linux)
+#   3. extract tarball as root inside a native-arm64 debian container and
+#      build a 6G ext4 image with mkfs.ext4 -d (correct uids/modes, no sudo)
+#   4. inject host SSH pubkey as root's authorized_keys (debugfs)
+#   5. convert to qcow2 guest/image/archroot.qcow2
+#   6. extract stock kernel Image + initramfs to guest/kernel/boot/
+#
+# Host deps (detected, never installed): curl, podman, qemu-img, bsdtar.
 set -eu
-echo "dev/build: not implemented yet — see docs/bringup.md Phase A-1." >&2
-echo "Next: install QEMU provider, fetch ArchLinuxARM-aarch64-latest.tar.gz." >&2
-exit 1
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+URL="http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz"
+MD5_EXPECT="23eec86365b24f7913c403e8f4e8719b"
+TARBALL="$ROOT/guest/rootfs/ArchLinuxARM-aarch64-latest.tar.gz"
+RAW="$ROOT/guest/rootfs/archroot.ext4"
+QCOW2="$ROOT/guest/image/archroot.qcow2"
+KEY="$HOME/.ssh/omarchy_android_ed25519"
+PUB="$KEY.pub"
+
+need() { command -v "$1" >/dev/null 2>&1 || { echo "dev/build: missing host dep: $1" >&2; exit 1; }; }
+need curl; need podman; need qemu-img; need bsdtar
+mkdir -p "$ROOT/guest/rootfs" "$ROOT/guest/image" "$ROOT/guest/kernel"
+
+if [ ! -f "$TARBALL" ]; then
+  echo "dev/build: downloading Arch ARM rootfs (~830MB)…"
+  curl -sL --fail "$URL" -o "$TARBALL"
+fi
+ACTUAL="$(md5 -q "$TARBALL")"
+[ "$ACTUAL" = "$MD5_EXPECT" ] || { echo "dev/build: MD5 mismatch: $ACTUAL" >&2; exit 1; }
+echo "dev/build: tarball MD5 ok."
+
+if [ ! -f "$PUB" ]; then
+  echo "dev/build: generating host SSH key $KEY (empty passphrase, local dev only)…"
+  ssh-keygen -t ed25519 -f "$KEY" -N "" -C "omarchy-android-milestone1"
+fi
+
+podman machine list 2>/dev/null | grep -q "Currently running" \
+  || { echo "dev/build: starting podman machine…"; podman machine start; }
+
+if [ ! -f "$RAW" ]; then
+  echo "dev/build: assembling ext4 image (extraction as root in container)…"
+  podman run --rm -v "$ROOT/guest/rootfs:/work:rw" -v "$PUB:/key.pub:ro" \
+    docker.io/library/debian:trixie-slim bash -c "
+      set -eu
+      apt-get update -qq && apt-get install -y -qq e2fsprogs libarchive-tools >/dev/null 2>&1
+      rm -rf /rootfs && mkdir -p /rootfs
+      bsdtar -xpf /work/ArchLinuxARM-aarch64-latest.tar.gz -C /rootfs
+      mkfs.ext4 -q -d /rootfs -L archroot /work/archroot.ext4 6G
+      debugfs -w -R 'mkdir /root/.ssh' /work/archroot.ext4 >/dev/null 2>&1 || true
+      printf 'write /key.pub /root/.ssh/authorized_keys\nchmod 0700 /root/.ssh\nchmod 0600 /root/.ssh/authorized_keys\n' \
+        | debugfs -w -f /dev/stdin /work/archroot.ext4 >/dev/null
+      e2fsck -p -f /work/archroot.ext4
+    "
+fi
+
+echo "dev/build: converting to qcow2…"
+qemu-img convert -O qcow2 "$RAW" "$QCOW2"
+
+echo "dev/build: extracting stock kernel…"
+bsdtar -xf "$TARBALL" -C "$ROOT/guest/kernel" ./boot/Image ./boot/initramfs-linux.img
+
+echo "dev/build: done."
+ls -l "$QCOW2" "$ROOT/guest/kernel/boot/"

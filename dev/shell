@@ -1,5 +1,11 @@
 #!/bin/sh
-# dev/shell — SSH into the guest. Stub.
+# dev/shell — SSH into the guest as root (key injected by dev/build).
+# Usage: dev/shell [command…]  (no args = interactive shell)
 set -eu
-echo "dev/shell: not implemented yet — guest not booted." >&2
-exit 1
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+KEY="$HOME/.ssh/omarchy_android_ed25519"
+[ -f "$KEY" ] || { echo "dev/shell: missing $KEY — run dev/build first." >&2; exit 1; }
+# shellcheck disable=SC2029
+exec ssh -i "$KEY" -o BatchMode=yes -o ConnectTimeout=10 \
+  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+  -p 2222 root@127.0.0.1 "$@"
