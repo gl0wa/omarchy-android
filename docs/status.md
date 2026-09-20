@@ -1,6 +1,6 @@
 # Status — project memory (update on every meaningful experiment)
 
-## Milestone 2 — active (2026-09-20)
+## Milestone 2 — CORE DESKTOP COMPLETE (2026-09-21)
 Explicit user authorization now includes Omarchy; older M1 scope exclusions below
 are historical. Pixel remains untouched and its host GPU blocker remains deferred.
 
@@ -20,7 +20,7 @@ checkpoint remains at 6 GiB. No kernel or GPU changes at this stage.
 
 Research: current upstream has Quickshell + Foot and Lua Hyprland configuration;
 released v4.0.4 and official ARM-aware package recipes are under inspection.
-Installation has not yet begun.
+Installation and reboot validation completed; see the M2 results below.
 
 ## Historical Milestone 1 record
 Milestone 1: aarch64 Arch + systemd + net + persistent storage + accelerated
@@ -177,4 +177,18 @@ apps; performance/power (moot until device 3D exists).
   Optional bundled apps and system provisioning intentionally not installed.
 - Independent review found retry/backup/evidence-path issues; fixed backup guards,
   checkpoint completion marker, unique diagnostics, theme preservation, dynamic UID.
-- Reboot and final reproducibility validation pending.
+- Final reboot passed: boot ID changed from `7ba964dd-23d6-4043-b384-84d494e01ffe`
+  to `7d5d169c-649f-4ec9-afc6-2e7710c7fd21`; systemd running, Omarchy autostarted,
+  GLX still accelerated. `dev/test-omarchy` PASS with actual shell/launcher/Foot.
+  Evidence: `artifacts/diagnostics/2026-09-21-omarchy-validation-VLobP7/`.
+- Ctrl+Shift+Return and typing `pwd` tested through UTM after reboot; correct output
+  `/home/desktop`. Existing pointer devices remain detected. Host coordinate-click
+  automation returned windowNotFoundAtPosition, so no new post-reboot physical
+  pointer-click result is claimed; baseline interactive pointer evidence remains.
+- Core installer rerun succeeded; no user config/theme reset. M1 provisioner is
+  guarded against overwriting Omarchy. All changes locally committed, no push.
+- Pixel evidence summarizer added and fixture-checked; actual saved console logs
+  still report custom boot/device PASS, accelerated Mesa FAIL. No phone access.
+- Full matrix/deviations/runbook: `docs/research/omarchy-arm64.md`, `docs/bringup.md`.
+  Next milestone: retest Pixel host GPU capability after an OTA, then transfer the
+  proven ARM64 guest only when acceleration is demonstrated.

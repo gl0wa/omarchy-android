@@ -1,0 +1,51 @@
+#!/bin/bash
+# Validate actual live Omarchy components; never provisions/replaces configs.
+set -euo pipefail
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export M1_SSH_PORT=${M1_SSH_PORT:-2223}
+OUT=$(mktemp -d "$ROOT/artifacts/diagnostics/$(date +%F)-omarchy-validation-XXXXXX")
+"$ROOT/dev/diagnose" > "$OUT/system.log"
+"$ROOT/dev/shell" 'test "$(uname -m)" = aarch64; test "$(systemctl is-system-running)" = running; cat /proc/sys/kernel/random/boot_id; pacman -Q' > "$OUT/packages-boot.txt"
+"$ROOT/dev/test-gpu" > "$OUT/gpu.log"
+"$ROOT/dev/omarchy-shell" glxinfo -B > "$OUT/glxinfo.log"
+grep -q 'Accelerated: yes' "$OUT/glxinfo.log"
+grep -iE '^OpenGL renderer string:.*(virgl|Virtio GPU|Venus)' "$OUT/glxinfo.log"
+! grep -iE '^OpenGL.*renderer.*(llvmpipe|softpipe|swrast|lavapipe)' "$OUT/glxinfo.log"
+"$ROOT/dev/omarchy-shell" hyprctl configerrors > "$OUT/configerrors.txt"
+[[ -z $(tr -d '[:space:]' < "$OUT/configerrors.txt") ]]
+"$ROOT/dev/omarchy-shell" omarchy-shell shell ping | tee "$OUT/shell-ping.txt"
+grep -qx ok "$OUT/shell-ping.txt"
+"$ROOT/dev/omarchy-shell" hyprctl -j layers > "$OUT/layers.json"
+"$ROOT/dev/omarchy-shell" hyprctl -j devices > "$OUT/devices.json"
+"$ROOT/dev/omarchy-shell" hyprctl -j binds > "$OUT/binds.json"
+"$ROOT/dev/omarchy-shell" hyprctl dispatch 'hl.dsp.exec_cmd("foot --app-id=omarchy-m2-test --title=Omarchy-ARM64-validation")'
+for attempt in {1..10}; do
+  "$ROOT/dev/omarchy-shell" hyprctl -j clients > "$OUT/clients.json"
+  grep -q omarchy-m2-test "$OUT/clients.json" && break
+  sleep 1
+done
+python3 - "$OUT" <<'PY'
+import json, pathlib, sys
+p=pathlib.Path(sys.argv[1])
+clients=json.loads((p/'clients.json').read_text())
+assert any(c['class']=='omarchy-m2-test' and c['mapped'] and not c['xwayland'] for c in clients), 'Native Foot missing'
+layers=(p/'layers.json').read_text()
+assert 'omarchy-bar' in layers and 'omarchy-background' in layers, 'Shell surfaces missing'
+devices=json.loads((p/'devices.json').read_text())
+assert devices['keyboards'] and devices['mice'], 'Input devices missing'
+binds=json.loads((p/'binds.json').read_text())
+assert any(b.get('description')=='VM Omarchy menu' for b in binds), 'VM menu binding missing'
+PY
+"$ROOT/dev/omarchy-shell" grim /home/desktop/.cache/omarchy-validation.png
+"$ROOT/dev/shell" 'cat /home/desktop/.cache/omarchy-validation.png' > "$OUT/desktop.png"
+"$ROOT/dev/omarchy-shell" omarchy-menu toggle apps
+"$ROOT/dev/omarchy-shell" hyprctl -j layers > "$OUT/menu-layers.json"
+grep -q 'omarchy-menu' "$OUT/menu-layers.json"
+"$ROOT/dev/omarchy-shell" grim /home/desktop/.cache/omarchy-validation.png
+"$ROOT/dev/shell" 'cat /home/desktop/.cache/omarchy-validation.png' > "$OUT/apps.png"
+"$ROOT/dev/omarchy-shell" omarchy-menu toggle apps
+"$ROOT/dev/shell" "pkill -u desktop -f '^foot --app-id=omarchy-m2-test '"
+"$ROOT/dev/shell" 'journalctl -b -t omarchy-shell --no-pager' > "$OUT/shell.log"
+echo "PASS: accelerated Mesa, Hyprland, Omarchy surfaces/IPC, native Foot, menu and input inventory."
+echo "Evidence: $OUT"
+echo 'Physical input/keybindings and reboot require the documented UTM validation steps.'

@@ -1,5 +1,6 @@
 # Milestone 2 proposal: Omarchy ARM guest work on Mac + Pixel retry trigger
-(Status 2026-09-20: M1 Mac side complete; Pixel 3D blocked on OS build —
+(Historical proposal; implemented 2026-09-21 — see [results](research/omarchy-arm64.md).
+Original status 2026-09-20: M1 Mac side complete; Pixel 3D blocked on OS build —
 this proposal updated accordingly. No implementation yet.)
 
 ## Milestone 1 recap (Mac side, 2026-09-20)

@@ -9,6 +9,11 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/artifacts/diagnostics/test-desktop-$(date +%Y%m%d-%H%M%S).log"
 OVL="$ROOT/guest/overlays/desktop"
 
+if "$ROOT/dev/shell" 'test -f /home/desktop/.local/state/omarchy/m2-core-seeded' 2>/dev/null; then
+  echo 'Omarchy detected: use dev/test-omarchy; refusing to overwrite its desktop configuration.' >&2
+  exit 1
+fi
+
 echo "== provisioning seatd + desktop user =="
 "$ROOT/dev/shell" '
   set -eu

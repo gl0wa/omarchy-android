@@ -95,3 +95,73 @@ Pixel lessons (do NOT rediscover):
 ## Phase C: Linux crosvm/Cuttlefish
 DEPRIORITIZED (Pixel app path answers AVF directly). Revisit only for
 KVM-specific behavior. M3+ nested-virt gate met but unattempted.
+
+## Milestone 2: Omarchy ARM64 on the existing UTM VM
+
+Completed 2026-09-21. Full source audit, compatibility matrix, deviations and
+limitations: [Omarchy ARM64](research/omarchy-arm64.md).
+
+The active disk is **UTM's bundle copy**, not `guest/image/archroot.qcow2`.
+Do not run `host/utm/make-bundle` or `dev/build` over the completed VM: those
+rebuild from another disk and discard this state. Do not run the M1 desktop
+provisioner; `dev/test-desktop` now refuses when Omarchy is detected.
+
+Starting from the working M1 UTM VM:
+
+1. Run `M1_SSH_PORT=2223 ./dev/test-gpu`, inspect native Foot/input, and capture
+   `dev/diagnose`. Shut down with `M1_SSH_PORT=2223 ./dev/shell systemctl poweroff`.
+2. With the disk closed, run `./dev/checkpoint-utm m1-2026-09-20` (or another
+   name and set `M2_CHECKPOINT` for the installer). Uses APFS CoW, not a full
+   additional image allocation. Existing checkpoint names are rejected.
+3. If still 6 GiB, grow the **working** powered-off UTM disk with
+   `qemu-img resize "$HOME/Library/Containers/com.utmapp.UTM/Data/Documents/omarchy-m1.utm/Data/archroot.qcow2" 24G`.
+   Start UTM, then `M1_SSH_PORT=2223 ./dev/shell resize2fs /dev/vda`.
+4. Run the explicit layers, validating logs after each:
+
+   ```sh
+   ./dev/install-omarchy packages
+   ./dev/install-omarchy core
+   ./dev/install-omarchy session
+   ./dev/test-omarchy
+   ```
+
+The installer defaults to SSH port 2223. It pins upstream v4.0.4, uses existing
+synchronized ArchARM repos without a partial database refresh, and fails on
+missing packages. It does not silently install host dependencies. Required host
+commands: bash, git, tar, ssh, python3, qemu-img, macOS APFS clone-capable cp.
+Root key/desktop account and seatd come from M1. The session stage deliberately
+restarts tty1 and its desktop; save guest work before rerunning it.
+
+Login is tty1 autologin for the existing development user, followed by UWSM.
+This profile retains networkd. It selects Omarchy stay-awake mode to avoid
+locking an account with no configured unlock password. SDDM, personal-account
+hardening, Wi-Fi/Bluetooth controls and optional bundled apps are not part of
+this core validation.
+
+Keyboard: upstream Super+Return opens Foot. Additional shortcuts avoid macOS
+and UTM capture conflicts: Ctrl+Shift+Return terminal, Ctrl+Shift+Space menu,
+Ctrl+Shift+A apps, Ctrl+Shift+W close. Ctrl+Alt is UTM's capture toggle on this
+host. Validate a real keypress, click, typing, and Apps → Foot in the VM window.
+
+For a reboot check, record `/proc/sys/kernel/random/boot_id`, then run
+`M1_SSH_PORT=2223 ./dev/shell systemctl reboot`, wait for SSH, and rerun
+`./dev/test-omarchy`. Confirm a new boot ID and `Accelerated: yes` in the saved
+GLX report. `./dev/omarchy-shell COMMAND...` runs commands in the live user
+session without guessing its compositor signature.
+
+Rollback: shut down the guest and fully quit UTM. Preserve the working bundle
+under a different name, then APFS-copy the checkpoint's entire `.utm` bundle
+back to its original path. Reopen UTM; the stable UUID and boot files are
+included. Never restore/copy an open disk. The exact checkpoint commit and boot
+hashes live beside its `COMPLETE` marker.
+
+Kernel upgrades remain a separate operation: the original `dev/sync-kernel`
+reads **guest/image/archroot.qcow2**, not the active UTM disk. Do not upgrade
+this VM's kernel and then use that default command expecting the bundle to be
+updated. Extract the active guest's `/boot/Image` and initramfs into its bundle
+before the next boot; maintain matching kernel/modules. No kernel upgrade was
+needed for M2. After a bundle rebuild, fully quit/reopen UTM to clear cached config.
+
+Pixel remains unchanged. `dev/probe-pixel-avf` summarizes saved evidence;
+see [usage](research/pixel-probe-usage.md) for the optional read-only OTA identity
+check and the existing APK test runbook. It does not claim a new GPU test ran.

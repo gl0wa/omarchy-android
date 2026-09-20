@@ -1,21 +1,28 @@
-# omarchy-android — Milestone 1: Arch ARM + accelerated Hyprland under AVF-like VMs
+# omarchy-android — accelerated Omarchy on ARM64
 
-> NOTE: no license file yet — all rights reserved until one is added.
-> Do not treat this as open source until then.
+**Milestone 2 core desktop complete (2026-09-21):** upstream Omarchy 4.0.4,
+Quickshell, Hyprland, Foot, launcher, themes and keyboard shortcuts run on the
+existing Arch Linux ARM UTM VM and return after reboot. Mesa remains
+`virgl (ANGLE / Apple M4 Pro / Metal)`, **Accelerated: yes**.
 
-Long-term goal: Omarchy-style Arch Linux ARM64 desktop inside Android via
-Android Virtualization Framework (AVF). **Milestone 1 scope is only the
-foundation**: aarch64 Arch Linux + systemd + networking + persistent storage +
-accelerated virtual GPU (Mesa, NOT llvmpipe) + Hyprland + Foot + input.
-Omarchy/Quickshell/themes/audio/clipboard/intents are explicitly out of scope.
+This is a minimal desktop profile, not the full Omarchy ISO application suite.
+See [bring-up](docs/bringup.md#milestone-2-omarchy-arm64-on-the-existing-utm-vm),
+[ARM64 matrix and deviations](docs/research/omarchy-arm64.md), and
+[project evidence](docs/status.md). The M1 reference has an APFS CoW rollback copy.
 
-## Current state (2026-09-20)
-Milestone 1 Mac side COMPLETE (virgl + Hyprland + Foot + input under UTM).
-Pixel side: custom Arch boots unrooted under AVF/pKVM (app + `vm` paths),
-BUT this OS build (CP41.260828.004.A8) has no functional custom-guest 3D
-(virglrenderer→crosvm SIGABRT, gfxstream→zero contexts) — Hyprland on Pixel
-blocked on the OS, not on our stack. See `docs/bringup.md`,
-`docs/status.md`, `docs/pixel-test-plan.md`.
+Pixel custom Arch boot works unrooted, but build CP41.260828.004.A8 has no working
+custom-guest 3D backend. No Pixel changes were made during M2. Retest only after
+an appropriate OTA; [evidence probe](docs/research/pixel-probe-usage.md).
+
+```sh
+./dev/install-omarchy packages  # after the documented M1 checkpoint
+./dev/install-omarchy core
+./dev/install-omarchy session   # starts/restarts the desktop
+./dev/test-omarchy              # actual desktop + accelerated GLX validation
+```
+
+The active disk is inside the UTM bundle. Do not rebuild that bundle from the
+older guest/image disk over this completed environment.
 
 ## Quickstart (Mac)
 Requires: Apple Silicon Mac, Homebrew (`brew install qemu`), UTM, podman,
@@ -29,7 +36,7 @@ via cmdline-tools; platforms android-36 + android-37.2-beta2, build-tools 36).
 ./dev/diagnose     # systemd/net/storage/kernel snapshot
 ./dev/sync-kernel  # re-extract /boot from qcow2 after any in-guest kernel upgrade (REQUIRED before next boot)
 ./dev/test-gpu     # DRM/Mesa/EGL/Vulkan report (must NOT be llvmpipe)
-./dev/test-desktop # minimal Hyprland + Foot via seatd/desktop user, captures logs
+./dev/test-desktop # M1 only; refuses to overwrite installed Omarchy
 host/utm/make-bundle  # (re)build omarchy-m1.utm from current qcow2; then Cmd+Q/reopen UTM, Start
 ```
 

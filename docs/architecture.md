@@ -1,4 +1,13 @@
-# Architecture (updated 2026-09-20: Mac path proven, Pixel path blocked on OS build)
+# Architecture (updated 2026-09-21: Omarchy core on Mac; Pixel GPU blocked)
+
+
+Milestone 2 adds unchanged upstream Omarchy 4.0.4 above the M1 graphics stack:
+ArchARM packages → tty1 development login → UWSM → Hyprland Lua → Quickshell
+bar/background/launcher → native Foot. `omarchy/` contains the explicit package,
+core and session layers plus VM user overrides. Upstream system provisioning is
+skipped; networkd and direct-kernel boot remain. Full deviations and validation:
+[Omarchy ARM64](research/omarchy-arm64.md). The M1/Pixel diagram below remains the
+foundation; the second layer list is historical research.
 
 ```
 Mac (PROVEN)                Pixel 8 Pro / CP41.260828.004.A8 (TESTED, BLOCKED)
