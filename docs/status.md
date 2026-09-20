@@ -9,8 +9,8 @@ MacBook; real-Android-AVF validation explicitly deferred to Phase D).
 ## Verified working (2026-09-20, Phase A)
 - QEMU 11.1.1 (stock brew) + HVF boots ArchLinuxARM-aarch64 (tarball
   2026-08-05, MD5 `23eec863…`) to systemd `running`, serial login prompt.
-- Stock `linux-aarch64` kernel 7.1.6-1 direct-boot (`-kernel Image`,
-  `root=/dev/vda`); no custom kernel needed so far.
+- Stock `linux-aarch64` kernel direct-boot (`-kernel Image`,
+  `root=/dev/vda`); no custom kernel needed (currently 7.2.6-1).
 - virtio-blk (`/dev/vda` 6G qcow2) + virtio-net-pci (DHCP 10.0.2.15, default
   route, external ping + DNS ok). No failed systemd units.
 - SSH: `alarm`/`alarm` (password) and `root` via injected ed25519 key
@@ -28,10 +28,9 @@ MacBook; real-Android-AVF validation explicitly deferred to Phase D).
 - 2D negative control (`M1_GPU=2d`, virtio-gpu-pci): `/dev/dri/card0` +
   `renderD128` appear; `dev/test-gpu` reports llvmpipe GLES 3.2 (expected —
   proves harness + DRM path, NOT the milestone).
-- Desktop harness validated on llvmpipe: Hyprland starts (DRM backend,
-  Xwayland up), `foot` client mapped+visible, native Wayland (`xwayland: 0`),
-  `hyprctl clients` works via seatd + `desktop` user. Renderer is the ONLY
-  missing piece (must become virgl, not llvmpipe).
+- Desktop harness validated on llvmpipe, then superseded by Phase B:
+  Hyprland + Foot run accelerated on virgl (below); the llvmpipe run only
+  proved harness mechanics.
 
 ## Verified working (2026-09-20, Phase B — ACCELERATED)
 - UTM `omarchy-m1` (8G RAM, virtio-gpu-gl-pci, HVF) boots ArchARM 7.2.6.
@@ -46,11 +45,14 @@ MacBook; real-Android-AVF validation explicitly deferred to Phase D).
 - Input stack: libinput sees `qemu-usb-tablet`, `qemu-usb-mouse`,
   `qemu-usb-keyboard` (+gpio-keys).
 
-## Current blocker
-Milestone 1 (Mac side): DONE — no blocker. Interactive check passed
-(typing works, Super+Return opens Foot; Super+Q unusable = macOS Cmd+Q host
-collision, not a guest bug).
-Next: D-3c COMPLETE 2026-09-20 — custom host APK (host/apk, unrooted,
+## Current state (no blocker — next steps are gated on external events)
+Milestone 1 (Mac side): DONE. Interactive check passed (typing works,
+Super+Return opens Foot; Super+Q unusable = macOS Cmd+Q host collision).
+Pixel (Phase D): custom-guest BOOT proven unrooted; 3D BLOCKED by OS build
+(see D-3c verdict below). Next: (a) Milestone 2 guest work on Mac whenever
+wanted; (b) Pixel GPU retry when a newer OS ships qualified virglrenderer
+(`host/apk` reinstall + probe, ~1 evening).
+D-3c verdict 2026-09-20 — custom host APK (host/apk, unrooted,
 permissions granted, reflection over @hide APIs) proves the app path end to
 end AND finds the platform boundary. VERDICT: NO accelerated graphics for
 custom guests on this build (CP41.260828.004.A8):
@@ -68,26 +70,40 @@ custom guests on this build (CP41.260828.004.A8):
 Phone restored: APK uninstalled, ANGLE + hidden_api_policy reverted, no VMs;
 4.6 GB /data/local/tmp staging preserved. Full story: docs/pixel-test-plan.md.
 
-## Evidence
-- Host: M4 Pro arm64, macOS 26.6, 48 GB; brew/adb/podman present; no
-  qemu/emulator/SDK. See `docs/research/development-environment.md`.
+## Evidence (2026-09-20 EOD)
+- Host: M4 Pro arm64, macOS 26.6, 48 GB; brew/adb/podman present; stock QEMU
+  11.1.1, Android SDK (36 + 37.2-beta2, build-tools 36), JDK 21, Gradle 8.9.
 - AVF is ARM64-only; pKVM needs physical hardware (AOSP docs).
-- crosvm needs Linux/KVM — cannot run on macOS.
-- Custom AVF guests document virglrenderer/virgl2; gfxstream undocumented.
-- ArchARM alive; stock `linux-aarch64` has virtio-gpu as module; Hyprland/
-  Foot/Mesa/vulkan-virtio all packaged for aarch64; Hyprland needs GLES 3.0,
-  not Vulkan.
+- crosvm needs Linux/KVM — cannot run on macOS (moot now: Pixel answers AVF).
+- `vm run` JSON has no gpu/display/network fields (serde drops them) —
+  code + device-verified, not just documented.
+- ArchARM alive; stock kernel has virtio-gpu module; Hyprland/Foot/Mesa/
+  vulkan-virtio packaged for aarch64; Hyprland needs GLES 3.0, not Vulkan.
+- Pixel 8 Pro / CP41.260828.004.A8, UNROOTED throughout: custom 7.2.6 boot,
+  Arch multi-user, ttyS0, raw disks, app/API GPU+display+input config honored
+  by virtmgr — but host crosvm has no functional 3D (SIGABRT / zero contexts).
 
-## Current hypothesis
-Fastest credible path: Phase A DONE on this Mac → Phase B virgl accel via
-UTM (validate `/dev/dri` + Mesa `virgl`, non-llvmpipe) → minimal Hyprland +
-Foot in the same VM → Phase C crosvm/Cuttlefish on Linux → Phase D Pixel for
-real AVF. QEMU-on-Mac validates packaging; it proves nothing about pKVM.
+## Current hypothesis (closed)
+Was: emulator-first ladder to Pixel GPU. Now: Mac reference COMPLETE;
+Pixel 3D is purely a function of OS build (needs shipped virglrenderer).
+No open technical unknowns in OUR stack — remaining work is Milestone 2
+guest packaging (Mac-provable) + a cheap retry trigger on OS updates.
 
 ## Experiments attempted
 | date | experiment | result |
 |------|------------|--------|
 | 2026-09-20 | D-3b: Terminal virglrenderer+gfxstream sentinels, ANGLE opt-in, VM restarts | NO EFFECT (both inert; shipped APK v17 lacks sentinel code — dex-verified). dmesg -virgl -context_init persists. Device + screenshots + ANGLE reverted afterwards |
+| 2026-09-20 | D-3b baseline via automated input-text+screencap+vision loop | Debian droid/pwless-sudo, kernel 6.12.92-android16, Mesa 25.0.7, /dev/dri present, Vulkan llvmpipe. Automation lessons: %s+CAPS gets IME-mangled (use keyevent 62 for space); never `--` with input text; MINUS via keyevent 69 |
+| 2026-09-20 | D session 1: `vm run` unrooted custom boot | H1 silent (ttyAMA0) → H2 boots (ttyS0): AVF serial is 8250. No MPAM panic on CLI path (default CPU). `linux,dummy-virt`, 1 vCPU |
+| 2026-09-20 | D session 1: disk formats | qcow2 opened as RAW bytes (3.95G vda, no superblock → emergency shell). Fix: raw + resize2fs -M (4.3G) → full multi-user + sshd (h4-console.log, 165 OKs) |
+| 2026-09-20 | D session 1: in-guest avf-probe service | one-shot dumps systemd/net/DRM/Mesa to ttyS0+hvc0 → lands in --console log; no interactive shell needed. Saved as guest/overlays/avf-probe/ |
+| 2026-09-20 | D session 1: D-3 via `vm run` (gpu virgl2 + display JSON, `-n` flag) | gpu AND network AND vsock ALL absent from crosvm line (schema drops them). eglinfo llvmpipe. Verdict: CLI serves blk/console only |
+| 2026-09-20 | D-3c: host/apk built (SDK 37.2-beta2, JDK 21, AGP 8.7.3, reflection) | installed + permissions granted unrooted + hidden_api_policy + ANGLE opt-in; VM create/run/console all work; direct /data/local/tmp paths accepted |
+| 2026-09-20 | D-3c: TAP via third-party app | FAILED: `Failed to create a TAP interface` → useNetwork(false); priv-gated, revisit separately (not needed for GPU) |
+| 2026-09-20 | D-3c: app path without GPU (NOGPU isolation) | console flows; guest PANICS at t=0: MPAM `d538a481` (match_host exposes Tensor MPAM) → `arm64.nompam` fixes (PocketVM corroborated) |
+| 2026-09-20 | D-3c: virglrenderer/virgl2 via app | host crosvm SIGABRT every run: `Failed to create virtio gpu worker thread: invalid rutabaga build parameters`; no virglrenderer .so on device |
+| 2026-09-20 | D-3c: gfxstream via app (one variable) | boots; virtio-gpu `+virgl +context_init`, 2 capsets, fb0, all inputs — but `No virgl contexts available on host` → llvmpipe; Vulkan finds no GPUs (no Venus). Saved as app-gfxstream-console.log |
+| 2026-09-20 | D-3c cleanup | force-stop kills VMs (verified empty); APK uninstalled; ANGLE + hidden_api_policy reverted; 4.6 GB /data/local/tmp staging preserved per instructions |
 | 2026-09-20 | D-3b baseline via automated input-text+screencap+vision loop | Debian droid/pwless-sudo, kernel 6.12.92-android16, Mesa 25.0.7, /dev/dri present, Vulkan llvmpipe. Automation lessons: %s+CAPS gets IME-mangled (use keyevent 62 for space); never `--` with input text; MINUS via keyevent 69 |
 | 2026-09-20 | host inventory + 4-way parallel upstream research | done, recorded in `docs/research/development-environment.md` |
 | 2026-09-20 | Phase A-1: stock `brew install qemu`, tarball fetch+MD5, ext4 via podman container (root, no sudo), debugfs key inject, qcow2, direct kernel boot | BOOT OK first try; systemd running; net + DNS ok; SSH ok; poweroff→reboot persistence ok |
@@ -104,14 +120,15 @@ real AVF. QEMU-on-Mac validates packaging; it proves nothing about pKVM.
 | 2026-09-20 | `M1_SSH_PORT=2223 ./dev/test-desktop` on virgl | Hyprland + Xwayland + foot (native Wayland, mapped/visible); libinput: usb-tablet/mouse/keyboard present |
 | 2026-09-20 | `dev/test-desktop` on llvmpipe (harness validation) | Hyprland UP, Xwayland UP, foot mapped+visible native Wayland; fixed 3 script bugs (chmod /run/user/0 via set -eu; RUNDIR as root; nested quoting → provisioned launcher file) |
 
-## Next experiment
-Phase B-2: ONE manual Start of `omarchy-m1` in UTM → `M1_SSH_PORT=2223
-./dev/test-gpu` (expect Mesa `virgl`, `Accelerated: yes`) → `M1_SSH_PORT=2223
-./dev/test-desktop` (same harness, accelerated) → keyboard/pointer check.
-If UTM passes `venus=true` and its QEMU/host rejects it, disable via
-`defaults write com.utmapp.UTM QEMUVulkanDriver -int 1`.
+## Next steps (nothing actionable today)
+1. Milestone 2 guest work on Mac (Omarchy packaging under UTM) — whenever wanted.
+2. Pixel GPU retry trigger: on OS update, pull Terminal APK, grep dex for
+   `virglrenderer` → if present, `./host/apk/assemble` + GPU probe (~1 evening).
+   Do NOT re-run random `vm run` GPU flags (proven inert).
+3. Phase C (Linux crosvm/Cuttlefish): DEPRIORITIZED — Pixel app path answers
+   AVF questions directly; revisit only if a KVM-specific behavior needs it.
 
 ## Deferred work
 Omarchy install/debug, Quickshell, themes, launchers, audio, clipboard,
-intents, battery, notifications; Venus/Vulkan; Cuttlefish; Pixel test plan
-(not needed until Phases A–C pass).
+intents, battery, notifications; protected-VM hardening; TAP for third-party
+apps; performance/power (moot until device 3D exists).

@@ -4,9 +4,10 @@
 
 Recipe (all encoded in `dev/*`, Mac Apple Silicon):
 1. `brew install qemu` (stock 11.1.1; headless only — no virgl in this build).
-2. Fetch `http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz`,
-   verify MD5 `23eec86365b24f7913c403e8f4e8719b` (GPG `.sig` check deferred —
-   no `gpg` on stock macOS; TODO: verify inside container).
+2. Fetch `http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz`
+   (+`.md5`, +`.sig`), verify MD5 `23eec86365b24f7913c403e8f4e8719b` on host
+   and GPG `.sig` in-container (key `68B3537F…2BDBE6A6`, fingerprint-checked;
+   both wired into `dev/build`).
 3. Start podman machine; in a native-arm64 debian container (root, no sudo):
    `bsdtar -xpf` tarball → `mkfs.ext4 -d` 6G image → debugfs inject host SSH
    pubkey as `/root/.ssh/authorized_keys` → `e2fsck`.
@@ -61,5 +62,35 @@ Notes:
    Super+Return opens a terminal. NOTE: Super acts as macOS Command, so
    Super+Q quits UTM itself (host collision, not a guest bug).
 
-## Phase C/D: Linux crosvm/Cuttlefish, then Pixel
-- Not started. Pixel requires `docs/pixel-test-plan.md` first.
+## Phase D: Pixel 8 Pro / Android 17, unrooted (DONE 2026-09-20 — full runbook in docs/pixel-test-plan.md)
+
+Mac-side prep: `qemu-img convert -O raw` qcow2 → `resize2fs -M` in container
+→ `adb push` to `/data/local/tmp/` (qcow2 is opened as RAW bytes by AVF —
+do NOT push qcow2). Kernel+initrd pushed alongside.
+
+`vm run` path (blk/console only): JSON needs kernel/initrd/disks/params
+(`console=ttyS0,115200` — AVF serial is 8250, NOT ttyAMA0) + `protected:false`
++ `platform_version:~1.0`; `--console <file>` captures serial; no GPU/net/
+vsock regardless of flags (schema drops them); no `adb root` needed.
+
+In-guest diagnostics without a shell: `guest/overlays/avf-probe/`
+(one-shot service dumps to ttyS0+hvc0 at boot → lands in console log).
+
+App path (`host/apk`, `./host/apk/assemble`): reflection over @hide
+VirtualMachine* APIs; needs install + 2 permission grants +
+`hidden_api_policy=1` + ANGLE opt-in (all reversible); honors match_host
+(needs `arm64.nompam` — Tensor MPAM panics stock kernel at t=0, `d538a481`);
+TAP priv-gated (useNetwork=false); console via getConsoleOutput stream +
+run-as; per-app virtmgr (`virtmgr_<pkg>`); force-stop kills its VMs.
+
+Pixel lessons (do NOT rediscover):
+- `export ANDROID_SERIAL=38091FDJG009PB` (stale wireless entries confuse adb).
+- Quote remote globs (`adb shell 'rm -f /sdcard/m1-*.png'`) — local zsh eats them.
+- `input text` IME pitfalls: no `%s`+CAPS (use keyevent 62 for space),
+  no `--`, MINUS via keyevent 69; tap (500,400)-ish refocuses Terminal.
+- Revert after sessions: uninstall test APK, ANGLE pkgs back, delete
+  hidden_api_policy, rm scratch (keep /data/local/tmp staging per plan).
+
+## Phase C: Linux crosvm/Cuttlefish
+DEPRIORITIZED (Pixel app path answers AVF directly). Revisit only for
+KVM-specific behavior. M3+ nested-virt gate met but unattempted.

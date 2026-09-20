@@ -1,29 +1,38 @@
-# Milestone 2 proposal: Omarchy ARM (NOT started — no implementation yet)
+# Milestone 2 proposal: Omarchy ARM guest work on Mac + Pixel retry trigger
+(Status 2026-09-20: M1 Mac side complete; Pixel 3D blocked on OS build —
+this proposal updated accordingly. No implementation yet.)
 
 ## Milestone 1 recap (Mac side, 2026-09-20)
 Proven under QEMU/UTM on Apple Silicon: ArchARM aarch64 + systemd + DHCP net +
 qcow2 persistence + SSH + Mesa virgl (ANGLE/Metal, GLES 3.0, non-llvmpipe) +
 Hyprland + Foot + USB keyboard/pointer. Reproducible via `dev/*`.
 
-## Explicitly NOT validated on real Android AVF (all requires Pixel, Phase D)
-- pKVM isolation, protected-VM boot, pvmfw/DICE, per-VM secrets
-- `VirtualizationService` / `vm run` with our kernel+rootfs
-- TAP/tethering, single-VM `avf_tap_fixed` limit, SELinux vsock/Surface rules
-- virgl2 vs gfxstream availability/capability/perf on device
-- `arm64.nompam` / `SERIAL_OF_PLATFORM` quirks, `dummy-virt` DTB behavior
-- Anything about power, thermals, or 16K pages on device
+## Pixel results that reshape Milestone 2 (see docs/pixel-test-plan.md)
+- PROVEN unrooted on Pixel 8 Pro / CP41.260828.004.A8: custom kernel boot,
+  Arch multi-user, ttyS0 console, raw disks, full app/API path (display,
+  input, console streams), MPAM quirk + fix.
+- BLOCKED: custom-guest 3D on this build (virglrenderer→SIGABRT,
+  gfxstream→zero contexts; Terminal itself is 2D-only). Retry when a newer
+  OS ships qualified virglrenderer (watch Terminal APK for the sentinel).
+- Therefore Milestone 2 splits: (a) guest-side Omarchy work, fully provable
+  on Mac NOW; (b) device enablement, gated on OS update, with `host/apk`
+  ready to re-test in one install.
 
-## Proposed Milestone 2 scope: Omarchy-style desktop on the proven base
-1. **Guestische image pipeline**: ArchARM + Omarchy ARM packages (Hyprland
-   ecosystem, Quickshell, themes, launcher) installed reproducibly into the
-   qcow2 via an overlay + package list (extend `guest/overlays/`), still
-   validated under UTM first.
-2. **Input polish**: remap conflicting binds (Super+Q vs macOS Cmd+Q),
-   pointer/keyboard layout, display scaling for the virtual monitor.
-3. **AVF packaging spike (needs Linux, Phase C)**: custom kernel/initrd JSON
-   for `vm run`, crosvm `--gpu backend=virglrenderer` parity check vs UTM.
-4. **Pixel test plan first** (`docs/pixel-test-plan.md` per AGENTS.md), then
-   Phase D: pick virgl2 vs gfxstream guest stack based on on-device evidence.
+## Explicitly NOT validated on real Android AVF (open, needs newer OS / later work)
+- pKVM isolation, protected-VM boot, pvmfw/DICE, per-VM secrets
+- TAP/tethering at scale for third-party apps (priv-gated on this build)
+- virgl2/gfxstream 3D contexts on device (absent on this build)
+- Performance/power characteristics (moot until 3D exists)
+
+## Proposed Milestone 2 scope
+1. **Guest Omarchy image pipeline on Mac** (unblocked NOW): ArchARM + Omarchy
+   ARM packages into the qcow2 via overlays + package list, validated under
+   UTM with virgl — same harness as M1.
+2. **Input/display polish on Mac**: keybind conflicts, scaling, layouts.
+3. **Device retry trigger (no active work)**: when an OS update lands, check
+   Terminal APK for `virglrenderer` strings → reinstall `host/apk` → rerun
+   GPU probe. One evening, not a project.
+4. **Pixel test plan stays** (`docs/pixel-test-plan.md`) as the device runbook.
 
 ## Deliberately out of Milestone 2
 Audio, clipboard sharing, Android intents, battery, notifications, GPU

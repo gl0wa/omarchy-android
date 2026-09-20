@@ -10,8 +10,11 @@ physical Pixel. Statuses: CONFIRMED / LIKELY / UNKNOWN / REQUIRES PHYSICAL DEVIC
 - `uname -m` = arm64, chip Apple M4 Pro, macOS 26.6 (build 25G72).
 - `brew` present (`/opt/homebrew/bin/brew`). `adb` 36.0.0 present via
   `android-platform-tools`. `scrcpy`, `podman`, `rust`, `gh` present.
-- NOT present: `qemu-system-aarch64`, `docker`, `lima`, `multipass`,
-  `virsh`, `sdkmanager`, `emulator`, `avdmanager`, `ANDROID_SDK_ROOT`.
+- Installed during Milestone 1: stock `qemu` 11.1.1 (brew), Android SDK
+  cmdline-tools + platforms android-36 + android-37.2-beta2 + build-tools
+  36.0.0 (`~/Library/Android/sdk`), JDK 21 (`/opt/homebrew/opt/openjdk@21`),
+  Gradle 8.9 (project-local dist under `host/apk/`).
+- NOT present: `docker`, `lima`, emulator/`avdmanager` (no need so far).
 - `UTM.app` installed (embeds QEMU as `qemu-aarch64-softmmu.framework`,
   plus ANGLE/Metal GPU patches; no standalone `qemu-system-aarch64` binary).
 - Repo `gl0wa/omarchy-android` exists, empty (`main`, no commits, origin set).
@@ -177,25 +180,28 @@ physical Pixel. Statuses: CONFIRMED / LIKELY / UNKNOWN / REQUIRES PHYSICAL DEVIC
    TAP/tethering, virtio-gpu virgl2 vs gfxstream on real AVF, perf/power.
    Requires `docs/pixel-test-plan.md` first per project rules.
 
-## 6. Status buckets
+## 6. Status buckets (updated 2026-09-20 after Mac + Pixel experiments)
 
-CONFIRMED
-- Host identity and missing deps (arm64 M4 Pro, macOS 26.6, no QEMU/SDK;
-  UTM+brew+podman+adb present).
-- AVF is ARM64-only; protection needs physical hardware.
-- crosvm cannot run on macOS (needs /dev/kvm Linux).
-- Cuttlefish needs Linux+KVM; emulator AVF flow needs Linux+KVM+nested virt.
-- Custom AVF guests officially support virtio-gpu virglrenderer/virgl2.
-- ArchARM tarball URL, stock kernel virtio-gpu modules, Hyprland/Foot/Mesa/
-  vulkan-virtio all packaged for aarch64; Hyprland needs GLES 3.0, not Vulkan.
+CONFIRMED (was prediction, now evidence — see docs/status.md, pixel-test-plan)
+- Host: QEMU-on-Mac + HVF + UTM virtio-gpu-gl yields guest Mesa `virgl`
+  (ANGLE/Metal, GLES 3.0) sufficient for Hyprland + Foot + input.
+- `vm run` JSON schema has no gpu/display/network fields (serde drops them);
+  only the app/API path can set them (code + device-verified).
+- Custom AVF guests get NO accelerated graphics on Pixel 8 Pro /
+  CP41.260828.004.A8: virglrenderer backend → host crosvm SIGABRT (rutabaga
+  not built with backend support, no .so on device); gfxstream backend →
+  device present but zero host 3D contexts (llvmpipe; no Venus). Shipped
+  Terminal v17 APK lacks the sentinel mechanism (dex-verified).
+- AVF serial console is 8250 `ttyS0` (not pl011 ttyAMA0); `vm run` works
+  unrooted as shell; raw images work, qcow2 is opened as raw bytes;
+  app-path match_host exposes Tensor MPAM → `arm64.nompam` required.
+- Prior CONFIRMED items still hold: AVF ARM64-only; crosvm Linux-only;
+  Cuttlefish/emulator need Linux+KVM; ArchARM packaging complete.
 
-LIKELY
-- QEMU-on-Mac + HVF + virtio-gpu-gl (qemu-virgl tap or UTM) yields guest Mesa
-  `virgl` (Accelerated: yes) sufficient for Hyprland smoke tests.
+LIKELY (still untested)
 - Nested Lima/UTM Linux VM on this M4 can expose /dev/kvm for Phase C
-  (M3+ nested-virt gate met; not yet attempted).
-- AVF gfxstream GPU path works for custom guests if the guest carries the
-  Mesa gfxstream ICD (inferred from Terminal app; undocumented).
+  (M3+ nested-virt gate met; not yet attempted — and deprioritized: the
+  Pixel app path already answers AVF questions directly).
 
 UNKNOWN
 - Whether Venus/Vulkan will work on this macOS 26 host (UTM 5.0 beta claims
@@ -205,12 +211,10 @@ UNKNOWN
 - Exact ArchARM EDK2/DTB boot recipe under QEMU `virt`+HVF (to be established
   in Phase A).
 
-REQUIRES PHYSICAL DEVICE
-- Any claim about pKVM isolation, pvmfw verification, per-VM secrets, stage-2
-  protection, protected-VM boot of arbitrary rootfs.
-- Real AVF TAP/tethering behavior (single-VM `avf_tap_fixed` limit), SELinux
-  `untrusted_app` vsock/Surface rules, vsock port >=1024 limits.
-- Whether AVF serves virgl2 vs gfxstream to a custom Arch guest, and its
-  GLES/Vulkan capability and performance/power characteristics.
-- `MPAMIDR_EL1` panic / `arm64.nompam` need, `dummy-virt` DTB/PCI quirks,
-  AVF console/earlycon behavior (observed via PocketVM on Pixel 8 Pro).
+REQUIRES PHYSICAL DEVICE (partially answered 2026-09-20, rest still open)
+- Answered: `vm run` serves blk/console only; virgl2 vs gfxstream on THIS
+  build = SIGABRT vs zero-contexts (no accel); MPAM panic + `arm64.nompam`
+  need reproduced; `dummy-virt` DTB + ttyS0/earlycon behavior confirmed.
+- Still open: pKVM isolation, pvmfw verification, per-VM secrets, stage-2
+  protection, protected-VM boot of arbitrary rootfs; real TAP/tethering at
+  scale; performance/power characteristics (moot until 3D exists).
