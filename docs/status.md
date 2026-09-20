@@ -66,6 +66,7 @@ real AVF. QEMU-on-Mac validates packaging; it proves nothing about pKVM.
 | 2026-09-20 | OBS: SSH banner timeout after -Syu → HYPO: kernel/modules mismatch (7.1.6 booted, 7.2.6 on disk, virtio_net=m) → EXP: `dev/sync-kernel` + reboot | CONFIRMED: 7.2.6 boots, net back. Procedure documented |
 | 2026-09-20 | `M1_GPU=2d` + `dev/test-gpu` | /dev/dri ok, llvmpipe as expected (negative control); fixed verdict false-positive (PCI desc ≠ renderer) |
 | 2026-09-20 | `QEMULauncher` direct exec to bypass UTM app | FAILED (SIGTRAP in secinit — XPC-service binary, not directly runnable) |
+| 2026-09-20 | Manual UTM Start of `omarchy-m1` | FAILED: `Could not open 'rw'` — root cause: UTM splits AdditionalArguments on whitespace, our `-append` value split into separate argv tokens; fixed (double-quote wrap) + stable VM UUID |
 | 2026-09-20 | `dev/test-desktop` on llvmpipe (harness validation) | Hyprland UP, Xwayland UP, foot mapped+visible native Wayland; fixed 3 script bugs (chmod /run/user/0 via set -eu; RUNDIR as root; nested quoting → provisioned launcher file) |
 
 ## Next experiment
