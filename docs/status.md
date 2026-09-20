@@ -31,12 +31,24 @@ vGPU (non-llvmpipe) + Hyprland + Foot + keyboard/pointer, emulator-first.
   `hyprctl clients` works via seatd + `desktop` user. Renderer is the ONLY
   missing piece (must become virgl, not llvmpipe).
 
+## Verified working (2026-09-20, Phase B — ACCELERATED)
+- UTM `omarchy-m1` (8G RAM, virtio-gpu-gl-pci, HVF) boots ArchARM 7.2.6.
+  (Two automation routes exhausted earlier: `utmctl` TCC -1743 with no
+  prompt; `QEMULauncher` SIGTRAP as XPC binary. Manual Start worked.)
+- `dev/test-gpu` on port 2223: Mesa **`virgl (ANGLE (Apple, Apple M4 Pro,
+  OpenGL 4.1 Metal))`**, GLES 3.0 — NOT llvmpipe. Graphics criterion MET.
+  (Vulkan: no valid GPUs — venus unavailable on this UTM path; Hyprland
+  doesn't need Vulkan.)
+- `dev/test-desktop` on virgl: Hyprland + Xwayland + `foot` (mapped, visible,
+  native Wayland `xwayland: 0`); monitor Virtual-1 1280x800 active.
+- Input stack: libinput sees `qemu-usb-tablet`, `qemu-usb-mouse`,
+  `qemu-usb-keyboard` (+gpio-keys).
+
 ## Current blocker
-virgl acceleration needs the UTM GPU VM (`omarchy-m1`, virtio-gpu-gl-pci).
-Two automation routes exhausted: `utmctl` needs a TCC Automation grant that
-never prompts (-1743, no Settings entry); `QEMULauncher` is an XPC-service
-binary (SIGTRAP in libsystem_secinit on direct exec). Remaining: ONE manual
-click on Start in the UTM window (VM is registered). No settings changes.
+Final interactive confirmation needs human eyes/hands (one minute): the UTM
+window should now show Hyprland + Foot instead of tty1. Click in the window,
+type in Foot, try Super+Return (new Foot) / Super+Q (close). Report result —
+that closes Milestone 1 on the Mac side (Pixel/AVF validation stays Phase D).
 
 ## Evidence
 - Host: M4 Pro arm64, macOS 26.6, 48 GB; brew/adb/podman present; no
@@ -67,6 +79,9 @@ real AVF. QEMU-on-Mac validates packaging; it proves nothing about pKVM.
 | 2026-09-20 | `M1_GPU=2d` + `dev/test-gpu` | /dev/dri ok, llvmpipe as expected (negative control); fixed verdict false-positive (PCI desc ≠ renderer) |
 | 2026-09-20 | `QEMULauncher` direct exec to bypass UTM app | FAILED (SIGTRAP in secinit — XPC-service binary, not directly runnable) |
 | 2026-09-20 | Manual UTM Start of `omarchy-m1` | FAILED: `Could not open 'rw'` — root cause: UTM splits AdditionalArguments on whitespace, our `-append` value split into separate argv tokens; fixed (double-quote wrap) + stable VM UUID |
+| 2026-09-20 | Same error after fix; UTM overview still showed 2 GB vs 8 GB on disk | ROOT CAUSE: running UTM caches parsed config, never re-reads file → quit (Cmd+Q) + reopen fixed it. Lesson: always verify displayed config after rebuild |
+| 2026-09-20 | `M1_SSH_PORT=2223 ./dev/test-gpu` on UTM GPU VM | **ACCELERATED: `virgl (ANGLE (Apple M4 Pro, OpenGL 4.1 Metal))`, GLES 3.0. Milestone graphics criterion MET.** Vulkan: no GPUs (no venus on this path; not required) |
+| 2026-09-20 | `M1_SSH_PORT=2223 ./dev/test-desktop` on virgl | Hyprland + Xwayland + foot (native Wayland, mapped/visible); libinput: usb-tablet/mouse/keyboard present |
 | 2026-09-20 | `dev/test-desktop` on llvmpipe (harness validation) | Hyprland UP, Xwayland UP, foot mapped+visible native Wayland; fixed 3 script bugs (chmod /run/user/0 via set -eu; RUNDIR as root; nested quoting → provisioned launcher file) |
 
 ## Next experiment
