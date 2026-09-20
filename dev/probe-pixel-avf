@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+"""Read-only AVF evidence inventory. No VM starts, installs, or device writes."""
+import argparse
+import json
+from pathlib import Path
+import re
+import shutil
+import subprocess
+
+ANSI = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]')
+PROPS = ('ro.product.model', 'ro.product.device', 'ro.build.fingerprint',
+         'ro.build.version.incremental', 'ro.build.version.release',
+         'ro.build.version.security_patch', 'ro.boot.hypervisor.vm.supported',
+         'ro.boot.hypervisor.protected_vm.supported', 'ro.boot.hypervisor.version')
+
+
+def summarize(sources):
+    rows = {name: {'status': 'UNKNOWN', 'evidence': []} for name in (
+        'build', 'AVF capability', 'custom-image boot', 'pKVM advertised',
+        'protected guest boot', 'display configured', 'virtio-gpu device',
+        'virglrenderer backend', 'gfxstream backend', '3D guest contexts',
+        'renderer', 'accelerated Mesa')}
+    votes = {name: set() for name in rows}
+
+    def add(name, status, source, number, line):
+        votes[name].add(status)
+        evidence = rows[name]['evidence']
+        item = {'source': source, 'line': number, 'text': line.strip()[:500], 'status': status}
+        # Keep evidence for both sides of a conflict.
+        if sum(e['status'] == status for e in evidence) < 3:
+            evidence.append(item)
+
+    for source, content in sources:
+        lines = ANSI.sub('', content).splitlines()
+        custom = any('M1-AVF-PROBE' in line for line in lines)
+        for i, line in enumerate(lines):
+            def hit(name, status):
+                add(name, status, source, i + 1, line)
+            if re.search(r'ro\.build\.(fingerprint|version\.incremental)\s*=\s*\S', line):
+                hit('build', 'PASS')
+            for prop, name in [('vm.supported', 'AVF capability'),
+                               ('protected_vm.supported', 'pKVM advertised')]:
+                m = re.search(r'ro\.boot\.hypervisor\.' + re.escape(prop) + r'\s*=\s*([01])\b', line)
+                if m:
+                    hit(name, 'PASS' if m[1] == '1' else 'FAIL')
+            if re.search(r'ro\.boot\.hypervisor\.version\s*=.*kvm.arm-protected', line):
+                hit('pKVM advertised', 'PASS')
+            if custom and re.search(r'Reached target.*(Multi-User|Graphical Interface)', line):
+                hit('custom-image boot', 'PASS')
+            if re.search(r'--gpu(?:[ =]).*\bbackend[=:]virglrenderer', line):
+                hit('virglrenderer backend', 'PASS')
+            if re.search(r'--gpu(?:[ =]).*\bbackend[=:]gfxstream', line):
+                hit('gfxstream backend', 'PASS')
+            if 'invalid rutabaga build parameters' in line:
+                # This generic error alone does not identify which backend failed.
+                hit('3D guest contexts', 'FAIL')
+            if re.search(r'--gpu-display\b|--display\b', line):
+                hit('display configured', 'PASS')
+            if re.search(r'virtio-gpu-pci detected|Initialized virtio_gpu', line):
+                hit('virtio-gpu device', 'PASS')
+            if 'No virgl contexts available on host' in line:
+                hit('3D guest contexts', 'FAIL')
+            renderer = re.search(r'(?:OpenGL[^\n]*renderer(?: string)?\s*:|deviceName\s*=|GPU\s*\d+\s*:)\s*(.+)', line, re.I)
+            if renderer:
+                hit('renderer', 'PASS')
+                value = renderer[1]
+                if re.search(r'llvmpipe|softpipe|swrast|lavapipe|swiftshader', value, re.I):
+                    hit('accelerated Mesa', 'FAIL')
+                elif re.search(r'virgl|Virtio GPU|Venus', value, re.I):
+                    # Require explicit Accelerated: yes near the renderer in this file.
+                    nearby = '\n'.join(lines[max(0, i - 15):i + 1])
+                    if re.search(r'Accelerated:\s*yes\b', nearby, re.I):
+                        hit('accelerated Mesa', 'PASS')
+                        hit('3D guest contexts', 'PASS')
+    for name, row in rows.items():
+        if len(votes[name]) == 1:
+            row['status'] = next(iter(votes[name]))
+        elif len(votes[name]) > 1:
+            row['note'] = 'Conflicting observations; inspect individual runs/builds.'
+    return rows
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('diagnostics', type=Path, help='A log file or diagnostics directory; no device access by default')
+    parser.add_argument('--collect-identity', action='store_true', help='Explicitly query adb getprop only (no physical VM tests)')
+    parser.add_argument('--serial', help='adb device serial; otherwise adb requires one authorized device')
+    parser.add_argument('--json', action='store_true', help='Print machine-readable report')
+    args = parser.parse_args()
+    if not args.diagnostics.exists():
+        parser.error('diagnostics path does not exist')
+    paths = [args.diagnostics] if args.diagnostics.is_file() else sorted(args.diagnostics.rglob('*'))
+    sources, skipped = [], []
+    for path in paths:
+        if not path.is_file() or path.is_symlink():
+            continue
+        if path.suffix.lower() not in ('.log', '.txt', '.out') or path.stat().st_size > 20 * 1024 * 1024:
+            skipped.append(str(path))
+            continue
+        sources.append((str(path), path.read_text(errors='replace')))
+    identity = {'status': 'UNKNOWN', 'properties': {}}
+    if args.collect_identity:
+        if not shutil.which('adb'):
+            identity['error'] = 'adb unavailable; no dependencies installed'
+        else:
+            cmd = ['adb'] + (['-s', args.serial] if args.serial else [])
+            try:
+                # Only this fixed read-only shell command is sent to the phone.
+                result = subprocess.run(cmd + ['shell', 'getprop'], capture_output=True, text=True, timeout=15)
+                if result.returncode:
+                    identity['error'] = result.stderr.strip()
+                else:
+                    props = dict(re.findall(r'^\[([^]]+)\]: \[(.*)\]$', result.stdout, re.M))
+                    identity['properties'] = {p: props[p] for p in PROPS if props.get(p)}
+                    identity['status'] = 'PASS' if identity['properties'] else 'UNKNOWN'
+            except (OSError, subprocess.TimeoutExpired) as error:
+                identity['error'] = str(error)
+    report = {'schema_version': 1, 'scope': 'Supplied logs only; identity is separate and does not date or validate historical logs.',
+              'files_analyzed': len(sources), 'files_skipped': skipped, 'live_identity': identity,
+              'checks': summarize(sources)}
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        print(report['scope'])
+        print(f"Analyzed {len(sources)} text files; skipped {len(skipped)} files.")
+        for name, row in report['checks'].items():
+            print(f"{row['status']:7} {name}")
+            if row.get('note'):
+                print('        ' + row['note'])
+            for evidence in row['evidence']:
+                print(f"        {evidence['source']}:{evidence['line']}: {evidence['text']}")
+        print('Live identity: ' + json.dumps(identity, sort_keys=True))
+        print('PASS means the named observation only; pKVM advertisement is not protected-guest boot proof.')
+
+
+if __name__ == '__main__':
+    main()
