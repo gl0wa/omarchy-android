@@ -22,6 +22,36 @@ Research: current upstream has Quickshell + Foot and Lua Hyprland configuration;
 released v4.0.4 and official ARM-aware package recipes are under inspection.
 Installation and reboot validation completed; see the M2 results below.
 
+## Pixel GPU retest — 2026-09-21 (user-requested, same build)
+
+Fresh targeted app/API runs on Pixel 8 Pro / Android 17 build
+`CP41.260828.004.A8` reproduce the host-layer blocker; no new accelerated path.
+Evidence: `artifacts/diagnostics/2026-09-21-pixel-retest/`.
+
+- **Observation/hypothesis:** user requested an empirical retest despite unchanged
+  build; test whether either existing backend now serves custom-guest 3D.
+- **Experiment 1:** unchanged probe APK + staged M1 Arch kernel/raw image,
+  `virglrenderer`/`virgl2`, same `arm64.nompam`, no TAP. crosvm aborts with
+  `Failed to create virtio gpu worker thread: invalid rutabaga build parameters`
+  and SIGABRT. `virglrenderer-host.log` preserves the new crash.
+- **Experiment 2:** change only backend/context selection to the existing
+  gfxstream profile. Arch boots; virtio-gpu detected; guest probe completes.
+  `No virgl contexts available on host`; GL/GLES renderer is
+  `llvmpipe (LLVM 22.1.8, 128 bits)`; Vulkan finds no valid GPUs.
+  `gfxstream-console.log` preserves the completed probe.
+- **Result:** accelerated Mesa FAIL; blocker remains Android host GPU support.
+  No Omarchy image transfer or desktop attempt on software rendering.
+- **Cleanup verified:** force-stopped only our app, uninstalled `dev.omarchy.m1host`,
+  no live crosvm/our virtmgr processes. Restored all four captured global settings
+  exactly (hidden_api_policy absent; original ANGLE package selection restored).
+  `settings-before.json`, `settings-after.json`, and `cleanup.log` document this.
+  Existing scratch guest staging preserved. No root/unlock/SELinux/system-image
+  changes; Mac VM untouched. Temporary permissions/settings explicitly approved.
+- APK build succeeded; SHA256
+  `485a2f0fe077a8a1507edd3d9795ec21ac8a28594cc70bb05b136e348da608ec`.
+- Next trigger remains a host software change; do not repeat these same tests
+  without new evidence or an explicit user request.
+
 ## Historical Milestone 1 record
 Milestone 1: aarch64 Arch + systemd + net + persistent storage + accelerated
 vGPU (non-llvmpipe) + Hyprland + Foot + keyboard/pointer, emulator-first.

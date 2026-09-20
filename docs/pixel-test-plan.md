@@ -217,3 +217,19 @@ Hyprland-on-Pixel stays blocked on host 3D, NOT on our guest stack (proven
 on Mac: virgl + Hyprland + Foot + input).
 Phone restored: APK uninstalled, ANGLE + hidden_api_policy reverted, no VMs
 running; 4.6 GB /data/local/tmp staging preserved per instructions.
+
+
+## Targeted retest — 2026-09-21
+
+At the user's explicit request, reran D-3c on the unchanged CP41.260828.004.A8
+build. Both results reproduced: virglrenderer aborts crosvm with invalid
+rutabaga build parameters; gfxstream boots Arch but exposes no working host
+3D contexts, producing llvmpipe. No guest graphics changes were attempted.
+Fresh logs: `artifacts/diagnostics/2026-09-21-pixel-retest/`.
+
+The user explicitly approved reinstalling the existing probe, the two AVF
+permissions, temporary hidden API access and ANGLE selection. Captured original
+settings before changes, stopped the app between profiles, collected separate
+host/console logs, then force-stopped/uninstalled the app and restored exact
+settings. Verified no live test VM processes. Staged guest files remain.
+This authorization was for this retest, not a standing relaxation of device rules.
