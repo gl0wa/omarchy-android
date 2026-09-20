@@ -1,0 +1,128 @@
+#!/bin/sh
+# host/utm/make-bundle — build a self-contained UTM .utm VM for GPU tests.
+#
+# Why UTM: stock brew QEMU has no virtio-gpu-gl; UTM 4.6.5 bundles ANGLE/Metal
+# virgl patches (-device virtio-gpu-gl-pci, gl=es). Config schema was
+# reverse-engineered from UTM source (see docs/research/development-environment.md
+# and inline refs to utmapp/UTM Configuration/*.swift).
+#
+# Layout: <UTM Documents>/omarchy-m1.utm/{config.plist,Data/*}.
+# Disk/kernel files are APFS-cloned (cp -c, instant CoW) from guest/*.
+# Safe to re-run: stops at nothing, overwrites the bundle.
+set -eu
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+VM_NAME="omarchy-m1"
+UTM_DOCS="$HOME/Library/Containers/com.utmapp.UTM/Data/Documents"
+BUNDLE="$UTM_DOCS/$VM_NAME.utm"
+QCOW2="$ROOT/guest/image/archroot.qcow2"
+KERNEL="$ROOT/guest/kernel/boot/Image"
+INITRD="$ROOT/guest/kernel/boot/initramfs-linux.img"
+
+for f in "$QCOW2" "$KERNEL" "$INITRD"; do
+  [ -f "$f" ] || { echo "host/utm/make-bundle: missing $f — run dev/build first." >&2; exit 1; }
+done
+command -v python3 >/dev/null 2>&1 || { echo "missing host dep: python3" >&2; exit 1; }
+
+VM_UUID="$(uuidgen)"
+DISK_ID="$(uuidgen)"
+KERN_ID="$(uuidgen)"
+INITRD_ID="$(uuidgen)"
+# Locally-administered unicast MAC
+MAC="$(python3 -c 'import random; b=[0x02]+[random.randrange(256) for _ in range(5)]; print(":".join("%02X"%x for x in b))')"
+
+rm -rf "$BUNDLE"
+mkdir -p "$BUNDLE/Data"
+# APFS copy-on-write clones: instant, no extra disk use until guest writes.
+cp -c "$QCOW2" "$BUNDLE/Data/archroot.qcow2"
+cp -c "$KERNEL" "$BUNDLE/Data/Image"
+cp -c "$INITRD" "$BUNDLE/Data/initramfs-linux.img"
+
+VM_UUID="$VM_UUID" DISK_ID="$DISK_ID" KERN_ID="$KERN_ID" INITRD_ID="$INITRD_ID" \
+MAC_ADDR="$MAC" BUNDLE="$BUNDLE" python3 - <<'EOF'
+import os, plistlib
+cfg = {
+    'Backend': 'QEMU',
+    'ConfigurationVersion': 4,
+    'Information': {
+        'Name': 'omarchy-m1',
+        'IconCustom': False,
+        'UUID': os.environ['VM_UUID'],
+    },
+    'System': {
+        'Architecture': 'aarch64',
+        'Target': 'virt',
+        'CPU': 'host',
+        'CPUFlagsAdd': [],
+        'CPUFlagsRemove': [],
+        'CPUCount': 4,
+        'ForceMulticore': True,
+        'MemorySize': 2048,
+        'JITCacheSize': 0,
+    },
+    'QEMU': {
+        'DebugLog': False,
+        'UEFIBoot': False,
+        'RNGDevice': True,
+        'BalloonDevice': False,
+        'TPMDevice': False,
+        'Hypervisor': True,
+        'TSO': False,
+        'RTCLocalTime': False,
+        'PS2Controller': False,
+        # QEMUArgument encodes as plain strings (utmapp/UTM QEMUArgument.swift).
+        'AdditionalArguments': [
+            '-append', 'root=/dev/vda rw rootwait console=ttyAMA0,115200',
+            '-serial', 'null',
+        ],
+    },
+    'Input': {
+        'UsbBusSupport': '2.0',
+        'UsbSharing': False,
+        'MaximumUsbShare': 3,
+    },
+    'Sharing': {
+        'DirectoryShareMode': 'None',
+        'DirectoryShareReadOnly': False,
+        'ClipboardSharing': False,
+    },
+    'Display': [{
+        # "-gl-" suffix => UTM passes gl=es (ANGLE/Metal) + virtio-gpu-gl
+        # (UTMQemuConfiguration+Arguments.swift isDisplayGLSupported).
+        'Hardware': 'virtio-gpu-gl-pci',
+        'DynamicResolution': True,
+        'UpscalingFilter': 'Linear',
+        'DownscalingFilter': 'Linear',
+        'NativeResolution': False,
+    }],
+    'Drive': [
+        {'ImageName': 'archroot.qcow2', 'ImageType': 'Disk',
+         'Interface': 'VirtIO', 'InterfaceVersion': 1,
+         'Identifier': os.environ['DISK_ID'], 'ReadOnly': False},
+        # LinuxKernel/LinuxInitrd drive types => -kernel/-initrd
+        # (drivesArguments in UTMQemuConfiguration+Arguments.swift).
+        {'ImageName': 'Image', 'ImageType': 'LinuxKernel',
+         'Interface': 'None', 'InterfaceVersion': 1,
+         'Identifier': os.environ['KERN_ID'], 'ReadOnly': False},
+        {'ImageName': 'initramfs-linux.img', 'ImageType': 'LinuxInitrd',
+         'Interface': 'None', 'InterfaceVersion': 1,
+         'Identifier': os.environ['INITRD_ID'], 'ReadOnly': False},
+    ],
+    'Network': [{
+        'Mode': 'Emulated',
+        'Hardware': 'virtio-net-pci',
+        'MacAddress': os.environ['MAC_ADDR'],
+        'IsolateFromHost': False,
+        'PortForward': [{'Protocol': 'TCP', 'HostPort': 2223, 'GuestPort': 22}],
+    }],
+    'Serial': [],
+    'Sound': [],
+}
+with open(os.path.join(os.environ['BUNDLE'], 'config.plist'), 'wb') as f:
+    plistlib.dump(cfg, f)
+print('wrote config.plist')
+EOF
+
+echo "host/utm/make-bundle: bundle ready: $BUNDLE"
+echo "VM UUID: $VM_UUID"
+echo "Note: UTM guest SSH is on port 2223 (2222 stays with dev/boot QEMU)."
+ls -l "$BUNDLE" "$BUNDLE/Data"

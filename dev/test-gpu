@@ -1,8 +1,26 @@
 #!/bin/sh
-# dev/test-gpu — DRM/Mesa/EGL/Vulkan report. Success MUST NOT be llvmpipe.
-# Runs inside the guest once booted; this host stub only checks readiness.
+# dev/test-gpu — guest graphics stack report.
+# Success MUST NOT be llvmpipe: expect virgl/Virtio GPU/Venus + Accelerated.
+# Works headless (eglinfo/vulkaninfo need no display server).
+# Env: M1_SSH_PORT (2222 headless QEMU, 2223 UTM GPU VM).
 set -eu
-echo "dev/test-gpu: not implemented yet — gated on Phase A boot + Phase B virgl." >&2
-echo "Guest criteria: /dev/dri/card0+renderD128, glxinfo -B shows" >&2
-echo "virgl/Virtio GPU/Venus with 'Accelerated: yes' (never llvmpipe)." >&2
-exit 1
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+OUT="$ROOT/artifacts/diagnostics/test-gpu-$(date +%Y%m%d-%H%M%S).log"
+"$ROOT/dev/shell" '
+  echo "=== /dev/dri"; ls -l /dev/dri 2>&1
+  echo "=== pci gpu"; lspci -k 2>/dev/null | grep -iA2 -E "vga|3d|display" || echo "(no pciutils match)"
+  echo "=== dmesg drm"; dmesg | grep -iE "drm|virtio.*gpu|virgl|venus" | head -20
+  echo "=== mesa version"; pacman -Q mesa vulkan-virtio 2>/dev/null
+  echo "=== icd/vendor files"; ls /usr/share/vulkan/icd.d/ 2>/dev/null; ls /usr/share/glvnd/egl_vendor.d/ 2>/dev/null
+  echo "=== eglinfo"; eglinfo -B 2>&1 | head -40
+  echo "=== vulkaninfo summary"; vulkaninfo --summary 2>&1 | grep -iE "GPU|driver|ERROR|failed" | head -20
+' 2>/dev/null | tee "$OUT"
+echo "--- verdict ---"
+if grep -qiE "llvmpipe|softpipe|swrast|SwiftShader|LVP" "$OUT" \
+   && ! grep -qiE "virgl|Virtio GPU|Venus" "$OUT"; then
+  echo "SOFTWARE RENDERER (llvmpipe) — graphics NOT solved."
+elif grep -qiE "virgl|Virtio GPU|Venus" "$OUT"; then
+  echo "ACCELERATED renderer visible — check details above."
+else
+  echo "INCONCLUSIVE — inspect $OUT."
+fi

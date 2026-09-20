@@ -1,6 +1,7 @@
 #!/bin/sh
 # dev/shell — SSH into the guest as root (key injected by dev/build).
 # Usage: dev/shell [command…]  (no args = interactive shell)
+# Env: M1_SSH_PORT (default 2222; UTM GPU VM uses 2223).
 set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 KEY="$HOME/.ssh/omarchy_android_ed25519"
@@ -8,4 +9,4 @@ KEY="$HOME/.ssh/omarchy_android_ed25519"
 # shellcheck disable=SC2029
 exec ssh -i "$KEY" -o BatchMode=yes -o ConnectTimeout=10 \
   -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-  -p 2222 root@127.0.0.1 "$@"
+  -p "${M1_SSH_PORT:-2222}" root@127.0.0.1 "$@"

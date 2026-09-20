@@ -16,13 +16,15 @@ vGPU (non-llvmpipe) + Hyprland + Foot + keyboard/pointer, emulator-first.
   default; minimal image has NO sudo — admin via root key.
 - Persistence: marker file survived graceful `systemctl poweroff` → reboot.
 - Reproducible via `./dev/build`, `./dev/boot`, `./dev/shell`, `./dev/diagnose`.
+- Packaging (no aarch64 gaps): `pacman -Syu` ok after `pacman-key --init` +
+  `--populate archlinuxarm`; installed mesa 26.2.3, vulkan-virtio 26.2.3,
+  hyprland 0.56.2, foot 1.28.0, mesa-utils, vulkan-tools, pciutils.
 
 ## Current blocker
-No GPU in the VM yet: stock brew QEMU has no `virtio-gpu-gl` (displays:
-none/curses/cocoa/dbus; GPU devices: plain `virtio-gpu-pci` only), so guest
-has no `/dev/dri` and Mesa would be llvmpipe. Phase B needs a GL-capable
-QEMU — UTM (installed, bundles ANGLE/Metal virgl patches) is the candidate;
-`knazarov/qemu-virgl` tap rejected (pins QEMU from Dec 2021, source build).
+UTM GPU VM (`omarchy-m1`, virtio-gpu-gl-pci, bundle crafted from UTM source
+schema) is registered but not started: `utmctl` gets OSStatus -1743
+(AppleEvents TCC consent missing). Waiting on one-time macOS Automation
+grant (user approved). Fallback: press Start in the UTM window manually.
 
 ## Evidence
 - Host: M4 Pro arm64, macOS 26.6, 48 GB; brew/adb/podman present; no
@@ -47,13 +49,14 @@ real AVF. QEMU-on-Mac validates packaging; it proves nothing about pKVM.
 | 2026-09-20 | Phase A-1: stock `brew install qemu`, tarball fetch+MD5, ext4 via podman container (root, no sudo), debugfs key inject, qcow2, direct kernel boot | BOOT OK first try; systemd running; net + DNS ok; SSH ok; poweroff→reboot persistence ok |
 | 2026-09-20 | `dev/boot` backgrounding via `eval` + multiline var | FAILED (fd inheritance hung tool call, quotes broke `-append`); fixed with shell function + plain `&` + file redirs |
 | 2026-09-20 | root/`root` SSH password | FAILED (sshd default blocks); `alarm`/`alarm` ok, root key ok |
+| 2026-09-20 | `pacman-key --init/populate`, `-Syu`, install mesa/hyprland/foot set | OK (mesa 26.2.3, hyprland 0.56.2, foot 1.28.0) |
+| 2026-09-20 | UTM GPU path: `host/utm/make-bundle` crafts `omarchy-m1.utm` (virtio-gpu-gl-pci, HVF, kernel/initrd drives, port 2223) from UTM source schema | bundle valid, registered in UTM; start blocked on TCC (-1743) |
 
 ## Next experiment
-Phase B-1: `pacman -Syu` + install Mesa/Hyprland/Foot packaging set
-(`mesa vulkan-virtio vulkan-icd-loader libdrm wayland mesa-utils
-vulkan-tools hyprland xorg-xwayland foot foot-terminfo ttf-dejavu pciutils`)
-in the running headless VM (packaging validation needs no GPU), then boot
-the same qcow2 under UTM with `virtio-gpu-gl` and run `./dev/test-gpu`.
+Phase B-2: start `omarchy-m1` in UTM (needs Automation grant), SSH to port
+2223, run `M1_SSH_PORT=2223 ./dev/test-gpu` — expect `/dev/dri/card0` +
+Mesa `virgl` (NOT llvmpipe). If UTM passes `venus=true` and its QEMU/host
+rejects it, disable via `defaults write com.utmapp.UTM QEMUVulkanDriver -int 1`.
 
 ## Deferred work
 Omarchy install/debug, Quickshell, themes, launchers, audio, clipboard,
