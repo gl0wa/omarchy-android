@@ -1,0 +1,26 @@
+#!/bin/bash
+# Install explicit layers onto the existing accelerated UTM guest.
+set -euo pipefail
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export M1_SSH_PORT=${M1_SSH_PORT:-2223}
+REV=c668141e9c42b13c80c9ca4ea108e11708c5e8a5
+SRC="$ROOT/artifacts/research/omarchy-v4.0.4"
+layer=${1:-}
+case "$layer" in packages|core|session) ;; *) echo 'Usage: dev/install-omarchy packages|core|session'; exit 2;; esac
+[[ -f "$ROOT/artifacts/checkpoints/${M2_CHECKPOINT:-m1-2026-09-20}/COMPLETE" ]] || { echo 'Create the documented M1 checkpoint first.' >&2; exit 1; }
+[[ -d "$SRC" ]] || git clone https://github.com/omacom/omarchy.git "$SRC"
+if [[ $(git -C "$SRC" rev-parse HEAD) != "$REV" ]]; then
+  git -C "$SRC" diff --quiet && git -C "$SRC" checkout --detach "$REV"
+fi
+[[ $(git -C "$SRC" rev-parse HEAD) == "$REV" ]]
+OUT=$(mktemp -d "$ROOT/artifacts/diagnostics/$(date +%F)-omarchy-$layer-XXXXXX")
+"$ROOT/dev/test-gpu" > "$OUT/gpu-before.log"
+grep -q '^ACCELERATED renderer' "$OUT/gpu-before.log" || { cat "$OUT/gpu-before.log"; exit 1; }
+"$ROOT/dev/shell" 'mkdir -p /opt/omarchy-arm64/source'
+COPYFILE_DISABLE=1 tar -C "$ROOT/omarchy" -cf - . | "$ROOT/dev/shell" 'tar -C /opt/omarchy-arm64 -xf -'
+if [[ $layer == core ]]; then
+  git -C "$SRC" archive "$REV" | "$ROOT/dev/shell" 'tar -C /opt/omarchy-arm64/source -xf -'
+fi
+"$ROOT/dev/shell" "bash /opt/omarchy-arm64/layers/$layer" 2>&1 | tee "$OUT/install.log"
+"$ROOT/dev/test-gpu" > "$OUT/gpu-after.log"
+grep -q '^ACCELERATED renderer' "$OUT/gpu-after.log" || { cat "$OUT/gpu-after.log"; exit 1; }

@@ -1,0 +1,36 @@
+#!/bin/bash
+set -euo pipefail
+home=/home/desktop
+install -Dm755 /opt/omarchy-arm64/overlays/session.sh /usr/local/bin/omarchy-vm-session
+install -Dm644 /usr/share/omarchy/default/uwsm/env.d/10-omarchy /usr/share/uwsm/env.d/10-omarchy
+# Ordinary user overrides; keep the entire upstream Hyprland tree unchanged.
+cat > "$home/.config/hypr/monitors.lua" <<'LUA'
+hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
+hl.env("GDK_SCALE", "1")
+LUA
+cat > "$home/.config/hypr/autostart.lua" <<'LUA'
+hl.on("hyprland.start", function()
+  hl.exec_cmd("uwsm finalize")
+end)
+LUA
+cp /opt/omarchy-arm64/overlays/vm.lua "$home/.config/hypr/vm.lua"
+grep -q 'require("hypr.vm")' "$home/.config/hypr/bindings.lua" || printf '\nrequire("hypr.vm")\n' >> "$home/.config/hypr/bindings.lua"
+su - desktop -c 'omarchy-toggle-idle stay-awake'
+# Avoid keybindings for deliberately omitted bundled applications.
+sed -i '/^-- omarchy_preinstalled_bindings = false$/s/^-- //' "$home/.config/hypr/hyprland.lua"
+cat > "$home/.bash_profile" <<'PROFILE'
+[[ -f ~/.bashrc ]] && . ~/.bashrc
+if [[ $(tty) == /dev/tty1 && -z ${WAYLAND_DISPLAY:-} ]]; then
+  exec /usr/local/bin/omarchy-vm-session
+fi
+PROFILE
+chown -R desktop:desktop "$home/.config/hypr" "$home/.bash_profile"
+install -d /etc/systemd/system/getty@tty1.service.d
+cat > /etc/systemd/system/getty@tty1.service.d/omarchy.conf <<'UNIT'
+[Service]
+ExecStart=
+ExecStart=-/usr/bin/agetty --autologin desktop --noclear %I $TERM
+UNIT
+systemctl enable seatd getty@tty1.service
+systemctl daemon-reload
+systemctl restart getty@tty1.service

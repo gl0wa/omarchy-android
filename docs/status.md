@@ -154,3 +154,27 @@ guest packaging (Mac-provable) + a cheap retry trigger on OS updates.
 Omarchy install/debug, Quickshell, themes, launchers, audio, clipboard,
 intents, battery, notifications; protected-VM hardening; TAP for third-party
 apps; performance/power (moot until device 3D exists).
+
+## M2 incremental results (2026-09-20)
+- Native package layer: ArchARM Quickshell 0.3.1, Qt 6.11.2, UWSM 0.27,
+  portals, fonts and shell utilities installed; existing kernel/Mesa/Hyprland
+  unchanged. GPU checks before/after remain accelerated.
+- Core: pinned upstream v4.0.4 `c668141e9c42b13c80c9ca4ea108e11708c5e8a5`,
+  selective unchanged source files in `/usr/share/omarchy`, command symlinks
+  in `/usr/local/bin`, Tokyo Night theme, Omarchy font and user configs.
+  `Hyprland --verify-config` says config ok; no compositor source patch.
+- Session: tty1 development autologin + UWSM; actual Quickshell loaded,
+  IPC ping `ok`, themed bar/background/root menu/apps menu render; Foot launched
+  both by Super+Return and selecting Apps → Foot. Foot is native Wayland.
+  Restarting getty replaces compositor/shell successfully.
+- GLX after Omarchy: `Accelerated: yes`, virgl/ANGLE Apple M4 Pro, Mesa 26.2.3.
+- UTM intercepts host shortcuts (Cmd+Space; Ctrl+Alt is capture toggle).
+  Added Ctrl+Shift+Space menu / A apps / Return terminal / W close. Menu shortcut
+  and keyboard selection validated via UTM UI. Built-in stay-awake selected:
+  development desktop account has no unlock password, as in M1.
+- Expected limitation: Quickshell has no NetworkManager/BlueZ backend in this
+  wired networkd VM (network itself works); these UI controls are not enabled.
+  Optional bundled apps and system provisioning intentionally not installed.
+- Independent review found retry/backup/evidence-path issues; fixed backup guards,
+  checkpoint completion marker, unique diagnostics, theme preservation, dynamic UID.
+- Reboot and final reproducibility validation pending.

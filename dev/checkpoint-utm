@@ -16,5 +16,6 @@ mkdir -p "$OUT"
 cp -cR "$BUNDLE" "$OUT/"
 git -C "$ROOT" rev-parse HEAD > "$OUT/repo-commit"
 shasum -a 256 "$OUT/$(basename "$BUNDLE")/Data/Image" "$OUT/$(basename "$BUNDLE")/Data/initramfs-linux.img" > "$OUT/boot.sha256"
+touch "$OUT/COMPLETE"
 echo "Checkpoint: $OUT"
 echo 'Restore only with guest stopped and UTM fully quit; preserve the current bundle first.'

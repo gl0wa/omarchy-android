@@ -1,0 +1,11 @@
+#!/bin/bash
+# Run a command as desktop with the live UWSM environment, from its home.
+set -euo pipefail
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export M1_SSH_PORT=${M1_SSH_PORT:-2223}
+uid=$("$ROOT/dev/shell" 'id -u desktop')
+[[ $uid =~ ^[0-9]+$ ]]
+cmd=$(printf '%q ' "$@")
+script='eval "$(systemctl --user show-environment)"; export $(systemctl --user show-environment | cut -d= -f1); cd "$HOME"; '
+script+="$cmd"
+"$ROOT/dev/shell" "runuser -u desktop -- env XDG_RUNTIME_DIR=/run/user/$uid DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus bash -lc $(printf '%q' "$script")"

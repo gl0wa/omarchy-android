@@ -1,0 +1,46 @@
+#!/bin/bash
+# Runs as root in the guest. No system provisioning from the upstream ISO.
+set -euo pipefail
+src=/opt/omarchy-arm64/source
+user=desktop
+home=/home/$user
+[[ $(uname -m) == aarch64 ]]
+[[ -f $src/config/hypr/hyprland.lua ]]
+install -d /usr/share/omarchy /usr/local/bin /usr/share/fonts/omarchy
+cp -a "$src"/. /usr/share/omarchy/
+for bin in "$src"/bin/*; do
+  [[ -f $bin ]] && ln -sfn "/usr/share/omarchy/bin/${bin##*/}" "/usr/local/bin/${bin##*/}"
+done
+install -m644 "$src/default/fonts/omarchy/omarchy.ttf" /usr/share/fonts/omarchy/
+install -m644 "$src/default/bash/env-bootstrap" /etc/profile.d/omarchy.sh
+# Seed selected desktop configs once; preserve subsequent personal edits.
+for cfg in hypr foot omarchy starship.toml; do
+  if [[ -d $src/config/$cfg ]]; then
+    mkdir -p "$home/.config/$cfg"
+    cp -an "$src/config/$cfg"/. "$home/.config/$cfg"/
+  elif [[ ! -e $home/.config/$cfg ]]; then
+    cp "$src/config/$cfg" "$home/.config/$cfg"
+  fi
+done
+# Existing M1 Foot config must be replaced once, after preserving it.
+if [[ ! -f $home/.local/state/omarchy/m2-core-seeded ]]; then
+  [[ -e $home/.config/foot/foot.ini.m1 ]] || cp -a "$home/.config/foot/foot.ini" "$home/.config/foot/foot.ini.m1"
+  cp "$src/config/foot/foot.ini" "$home/.config/foot/foot.ini"
+  [[ -e $home/.bashrc.m1 ]] || cp -a "$home/.bashrc" "$home/.bashrc.m1"
+  printf 'source /usr/share/omarchy/default/bash/rc\n' > "$home/.bashrc"
+fi
+install -d "$home/.local/state/omarchy/done" "$home/.local/state/omarchy/toggles/hypr" "$home/.config/omarchy/branding"
+cp -n "$src/default/hypr/toggles/flags.lua" "$home/.local/state/omarchy/toggles/hypr/flags.lua" || true
+cp "$src/logo.txt" "$home/.config/omarchy/branding/screensaver.txt"
+cp "$src/icon.txt" "$home/.config/omarchy/branding/about.txt"
+# This VM profile deliberately skips upstream hardware/app first-run provisioning.
+touch "$home/.local/state/omarchy/done/first-run-user"
+cp "$src/default/xdg-terminal-exec/hyprland-xdg-terminals.list" "$home/.config/hyprland-xdg-terminals.list"
+usermod -s /bin/bash "$user"
+chown -R "$user:$user" "$home/.config" "$home/.local" "$home/.bashrc"
+if [[ ! -s $home/.local/state/omarchy/current/theme.name ]]; then
+  su - "$user" -c 'OMARCHY_THEME_HEADLESS=1 omarchy-theme-set "Tokyo Night"'
+fi
+fc-cache -f
+touch "$home/.local/state/omarchy/m2-core-seeded"
+chown "$user:$user" "$home/.local/state/omarchy/m2-core-seeded"

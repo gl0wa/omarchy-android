@@ -1,0 +1,7 @@
+#!/bin/bash
+set -euo pipefail
+[[ $(uname -m) == aarch64 ]]
+mapfile -t packages < <(grep -vE '^#|^$' /opt/omarchy-arm64/core.packages)
+# Use the synchronized M1 repositories, do not perform a partial database refresh.
+# Full system upgrades are a separate layer requiring dev/sync-kernel.
+pacman -S --needed --noconfirm "${packages[@]}"
