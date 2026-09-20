@@ -64,11 +64,13 @@ cfg = {
         'CPUFlagsRemove': [],
         'CPUCount': 4,
         'ForceMulticore': True,
-        'MemorySize': 2048,
+        'MemorySize': 8192,
         'JITCacheSize': 0,
     },
     'QEMU': {
-        'DebugLog': False,
+        # DebugLog writes the exact QEMU argv to Data/debug.log — keep on
+        # until GPU bringup is stable (proves what UTM actually executed).
+        'DebugLog': True,
         'UEFIBoot': False,
         'RNGDevice': True,
         'BalloonDevice': False,
